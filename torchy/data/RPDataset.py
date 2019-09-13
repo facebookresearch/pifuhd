@@ -45,10 +45,11 @@ class RPDataset(Dataset):
         self.num_sample_inout = self.opt.num_sample_inout
         self.num_sample_color = self.opt.num_sample_color
 
-        self.max_view_angle = 360
-        self.interval = 1
-        if not self.is_train:
-            self.interval = 10
+        self.max_yaw_angle = 360
+        self.max_pitch_angle = 45 # that's for positive and negative
+        self.interval_yaw = self.opt.interval_yaw
+        self.interval_pitch = self.opt.interval_pitch
+
         self.subjects = self.get_subjects()
 
         # PIL to tensor
@@ -80,7 +81,14 @@ class RPDataset(Dataset):
             return sorted(list(all_subjects))
 
     def __len__(self):
-        return len(self.subjects) * self.max_view_angle // self.interval
+        yaw_size = self.max_yaw_angle
+        intv_yaw = self.interval_yaw
+        pitch_size = 2 * self.max_pitch_angle + 1
+        intv_pitch = self.interval_pitch
+
+        yaw_val = yaw_size - yaw_size // intv_yaw if self.is_train else yaw_size // intv_yaw
+        pitch_val = pitch_size - pitch_size // intv_pitch - 1 if self.is_train else pitch_size // intv_pitch + 1
+        return len(self.subjects) * yaw_val * pitch_val
 
     def get_render(self, subject, num_views, pitch=0, view_id=None, random_sample=False):
         '''
@@ -97,12 +105,12 @@ class RPDataset(Dataset):
             'mask': None, # [num_views, 1, H, W] segmentation masks
         '''
         if view_id is None:
-            view_id = np.random.randint(self.max_view_angle)
+            view_id = np.random.randint(self.max_yaw_angle)
         # views are sampled evenly unless random_sample is enabled
-        view_ids = [(view_id + self.max_view_angle // num_views * offset) % self.max_view_angle
+        view_ids = [(view_id + self.max_yaw_angle // num_views * offset) % self.max_yaw_angle
                     for offset in range(num_views)]
         if random_sample:
-            view_ids = np.random.choices(self.max_view_angle, num_views, replace=False)
+            view_ids = np.random.choices(self.max_yaw_angle, num_views, replace=False)
 
         calib_list = []
         render_list = []
@@ -316,7 +324,26 @@ class RPDataset(Dataset):
         subject = ''
         try:
             sid = index % len(self.subjects)
-            vid = (index // len(self.subjects)) * self.interval
+            tmp = index // len(self.subjects)
+
+            yaw_size = self.max_yaw_angle
+            intv_yaw = self.interval_yaw
+            pitch_size = 2 * self.max_pitch_angle + 1
+            intv_pitch = self.interval_pitch
+
+            yaw_val = yaw_size - yaw_size // intv_yaw if self.is_train else yaw_size // intv_yaw
+            pitch_val = pitch_size - pitch_size // intv_pitch - 1 if self.is_train else pitch_size // intv_pitch + 1
+
+            if self.is_train:
+                vid = tmp % yaw_val
+                pid = tmp // yaw_val
+                vid = intv_yaw * (vid // (intv_yaw - 1)) + vid % (intv_yaw - 1) + 1
+                pid = intv_pitch * (pid // (intv_pitch- 1)) + pid % (intv_pitch - 1) + 1 - self.max_pitch_angle
+            else:
+                vid = tmp % yaw_val
+                pid = tmp // yaw_val
+                vid = intv_yaw * vid
+                pid = intv_pitch * pid - self.max_pitch_angle
             # name of the subjects 'rp_xxxx_xxx'
             subject = self.subjects[sid]
             res = {
@@ -328,7 +355,7 @@ class RPDataset(Dataset):
                 'b_max': self.B_MAX,
             }
             render_data = self.get_render(subject, num_views=self.num_views, view_id=vid,
-                                          random_sample=self.opt.random_multiview)
+                                          pitch=pid, random_sample=self.opt.random_multiview)
             sample_data = self.select_sampling_method(subject)
 
             res.update(render_data)
@@ -343,3 +370,33 @@ class RPDataset(Dataset):
 
     def __getitem__(self, index):
         return self.get_item(index)
+
+def test(is_train=True):
+
+    max_yaw_angle = 10
+    max_pitch_angle = 5
+    interval_yaw = 2
+    interval_pitch = 5
+    yaw_size = max_yaw_angle
+    intv_yaw = interval_yaw
+    pitch_size = 2 * max_pitch_angle + 1
+    intv_pitch = interval_pitch
+
+    yaw_val = yaw_size - yaw_size // intv_yaw if is_train else yaw_size // intv_yaw
+    pitch_val = pitch_size - pitch_size // intv_pitch - 1 if is_train else pitch_size // intv_pitch + 1
+        
+    for tmp in range(0, yaw_val * pitch_val):
+        if is_train:
+            vid = tmp % yaw_val
+            pid = tmp // yaw_val
+            vid = intv_yaw * (vid // (intv_yaw - 1)) + vid % (intv_yaw - 1) + 1
+            pid = intv_pitch * (pid // (intv_pitch- 1)) + pid % (intv_pitch - 1) + 1 - max_pitch_angle
+        else:
+            vid = tmp % yaw_val
+            pid = tmp // yaw_val
+            vid = intv_yaw * vid
+            pid = intv_pitch * pid - max_pitch_angle
+        print(vid, pid)
+
+if __name__ in '__main__':
+    test(True)

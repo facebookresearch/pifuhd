@@ -64,7 +64,7 @@ def reshape_sample_tensor(sample_tensor, num_views):
     )
     return sample_tensor
 
-def gen_mesh(opt, net, cuda, data, save_path, use_octree=False):
+def gen_mesh(res, net, cuda, data, save_path, use_octree=False):
     image_tensor = data['img'].to(device=cuda)
     calib_tensor = data['calib'].to(device=cuda)
 
@@ -82,7 +82,7 @@ def gen_mesh(opt, net, cuda, data, save_path, use_octree=False):
         cv2.imwrite(save_img_path, save_img)
 
         verts, faces, _, _ = reconstruction(
-            net, cuda, calib_tensor, opt.resolution, b_min, b_max, use_octree=use_octree)
+            net, cuda, calib_tensor, res, b_min, b_max, use_octree=use_octree)
         verts_tensor = torch.from_numpy(verts.T).unsqueeze(0).to(device=cuda).float()
         xyz_tensor = net.projection(verts_tensor, calib_tensor[:1])
         uv = xyz_tensor[:, :2, :]
@@ -322,14 +322,14 @@ def train(opt):
                 test_data = random.choice(test_dataset)
                 save_path = '%s/%s/test_eval_epoch%d_%s.obj' % (
                     opt.results_path, opt.name, epoch, test_data['name'])
-                gen_mesh(opt, netG, cuda, test_data, save_path)
+                gen_mesh(opt.resolution, netG, cuda, test_data, save_path)
 
             print('generate mesh (train) ...')
             for gen_idx in range(opt.num_gen_mesh_test):
                 train_data = random.choice(train_dataset)
                 save_path = '%s/%s/train_eval_epoch%d_%s.obj' % (
                     opt.results_path, opt.name, epoch, train_data['name'])
-                gen_mesh(opt, netG, cuda, train_data, save_path)
+                gen_mesh(opt.resolution//2, netG, cuda, train_data, save_path)
 
 
 if __name__ == '__main__':

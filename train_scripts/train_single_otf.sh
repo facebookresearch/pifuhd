@@ -80,6 +80,6 @@ CUDA_VISIBLE_DEVICES=${GPU_ID} python ./apps/train.py \
     --aug_con ${AUG_CON} \
     --aug_sat ${AUG_SAT} \
     --aug_hue ${AUG_HUE} \
-    --resume_epoch 10 \
+    --resume_epoch 85 \
     --continue_train
 
