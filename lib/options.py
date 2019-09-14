@@ -60,8 +60,7 @@ class BaseOptions():
         g_sample.add_argument('--num_sample_color', type=int, default=None, help='# of sampling points')
         g_sample.add_argument('--num_pts_dic', type=int, default=5, help='# of pts dic you load')
 
-        g_sample.add_argument('--interval_yaw', type=int, default=10, help='interval yaw angle')
-        g_sample.add_argument('--interval_pitch', type=int, default=5, help='interval pitch angle')
+        g_sample.add_argument('--max_pitch', type=int, default=45, help='max pitch angle')
 
         g_sample.add_argument('--sampling_otf', action='store_true', help='Sampling on the fly')
         g_sample.add_argument('--sampling_mode', type=str, default='sigma_5', help='Sampling file name.')

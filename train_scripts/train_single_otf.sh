@@ -34,6 +34,8 @@ AUG_SAT=0.08
 AUG_HUE=0.08
 AUG_GRY=0.1
 
+MAX_PITCH=10
+
 CHECKPOINTS_PATH='./checkpoints'
 RESULTS_PATH='./results'
 
@@ -65,6 +67,7 @@ CUDA_VISIBLE_DEVICES=${GPU_ID} python ./apps/train.py \
     --random_scale \
     --random_trans \
     --random_flip \
+    --max_pitch ${MAX_PITCH} \
     --sampling_mode ${SAMPLE_MODE} \
     --sampling_otf \
     --prob_min ${PROB_MIN} \

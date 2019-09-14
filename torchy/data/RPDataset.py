@@ -46,9 +46,8 @@ class RPDataset(Dataset):
         self.num_sample_color = self.opt.num_sample_color
 
         self.max_yaw_angle = 360
-        self.max_pitch_angle = 45 # that's for positive and negative
-        self.interval_yaw = self.opt.interval_yaw
-
+        self.max_pitch_angle = self.opt.max_pitch # that's for positive and negative
+        
         self.subjects = self.get_subjects()
 
         # PIL to tensor
