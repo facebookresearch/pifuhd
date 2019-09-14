@@ -18,7 +18,7 @@ SIGMA_MAX=5.0
 THICK_MIN=0.005
 THICK_MAX=0.02
 
-NUM_EPOCH=200
+NUM_ITER=100000
 NUM_VIEWS=1
 BATCH_SIZE=3
 ENC_DIM='3 8 16 32 64 128'
@@ -34,7 +34,7 @@ AUG_SAT=0.08
 AUG_HUE=0.08
 AUG_GRY=0.1
 
-MAX_PITCH=10
+MAX_PITCH=45
 
 CHECKPOINTS_PATH='./checkpoints'
 RESULTS_PATH='./results'
@@ -48,7 +48,7 @@ CUDA_VISIBLE_DEVICES=${GPU_ID} python ./apps/train.py \
     --dataroot ${DATAROOT} \
     --dataset ${DATASET} \
     --name ${NAME} \
-    --num_epoch ${NUM_EPOCH} \
+    --num_iter ${NUM_ITER} \
     --batch_size ${BATCH_SIZE} \
     --enc_dim ${ENC_DIM} \
     --mlp_dim ${MLP_DIM} \
@@ -61,7 +61,7 @@ CUDA_VISIBLE_DEVICES=${GPU_ID} python ./apps/train.py \
     --netG ${NETG} \
     --num_stack 2 \
     --hg_depth 2 \
-    --schedule 120 180 \
+    --schedule 50000 75000 \
     --resolution ${VOL_RES} \
     --hg_down 'ave_pool' \
     --random_scale \
@@ -82,7 +82,5 @@ CUDA_VISIBLE_DEVICES=${GPU_ID} python ./apps/train.py \
     --aug_bri ${AUG_BRI} \
     --aug_con ${AUG_CON} \
     --aug_sat ${AUG_SAT} \
-    --aug_hue ${AUG_HUE} \
-    --resume_epoch 85 \
-    --continue_train
+    --aug_hue ${AUG_HUE}
 

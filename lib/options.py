@@ -40,7 +40,7 @@ class BaseOptions():
         g_train.add_argument('--display_id', type=int, default=0, help='port of visdom')
         g_train.add_argument('--learning_rate', type=float, default=1e-3, help='adam learning rate')
         g_train.add_argument('--learning_rateC', type=float, default=1e-3, help='adam learning rate')
-        g_train.add_argument('--num_epoch', type=int, default=40, help='num epoch to train')
+        g_train.add_argument('--num_iter', type=int, default=30000, help='num iterations to train')
         g_train.add_argument('--freq_plot', type=int, default=500, help='freqency of the error plot')
         g_train.add_argument('--freq_save', type=int, default=3000, help='freqency of the save_checkpoints')
         g_train.add_argument('--freq_mesh', type=int, default=4000, help='freqency of the save_checkpoints')

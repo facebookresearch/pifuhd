@@ -231,7 +231,9 @@ def train(opt):
 
     # training
     start_epoch = 0 if not opt.continue_train else opt.resume_epoch
-    for epoch in range(start_epoch, opt.num_epoch):
+    num_epoch = opt.num_iter // len(train_data_loader)
+    cur_iter = start_epoch * len(train_data_loader)
+    for epoch in range(start_epoch, num_epoch):
         epoch_start_time = time.time()
 
         set_train()
@@ -267,8 +269,8 @@ def train(opt):
                     iter_net_time - epoch_start_time)
             
             print(
-                'Name: {0} | Epoch: {1} | {2}/{3} | Err: {4:06f} | dataT: {5:05f} | netT: {6:05f} | ETA: {7:02d}:{8:02d}'.format(
-                    opt.name, epoch, train_idx, len(train_data_loader), errG.item(),
+                'Name: {0} | Epoch: {1}/{2} | {3}/{4} | Err: {5:05f} | LR: {6:.1e} | dataT: {7:04f} | netT: {8:04f} | ETA: {9:02d}:{10:02d}'.format(
+                    opt.name, epoch, num_epoch, train_idx, len(train_data_loader), errG.item(), lr,
                                                                         iter_start_time - iter_data_time,
                                                                         iter_net_time - iter_start_time, int(eta // 60),
                     int(eta - 60 * (eta // 60))))
@@ -295,8 +297,8 @@ def train(opt):
                 vis.display_current_results(epoch, visuals)
 
             iter_data_time = time.time()
-        
-        lr = adjust_learning_rate(optimizerG, epoch, lr, opt.schedule, opt.gamma)
+            cur_iter += 1    
+            lr = adjust_learning_rate(optimizerG, cur_iter, lr, opt.schedule, opt.gamma)
 
         ## test
         with torch.no_grad():
