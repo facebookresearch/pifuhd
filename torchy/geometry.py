@@ -14,6 +14,19 @@ def index(feat, uv):
     samples = torch.nn.functional.grid_sample(feat, uv)
     return samples[:, :, :, 0]
 
+def index3d(feat, uv):
+    '''
+    extract volumetric features at floating coordinates with trilinear interpolation
+    args:
+        feat: [B, C, D, H, W]
+        uv: [B, 3, N] normalized voxel coordinates ranged in [-1, 1]
+    return:
+        [B, C, N] sampled voxel values
+    '''
+    uv = uv.transpose(1,2)[:,:,None,None]
+    samples = torch.nn.functional.grid_sample(feat, uv)
+    return samples[:, :, :, 0, 0]
+
 def orthogonal(points, calib, transform=None):
     '''
     project points onto screen space using orthogonal projection

@@ -47,7 +47,8 @@ class RPDataset(Dataset):
 
         self.max_yaw_angle = 360
         self.max_pitch_angle = self.opt.max_pitch # that's for positive and negative
-        
+        self.mean_pitch = self.opt.mean_pitch
+
         self.subjects = self.get_subjects()
 
         # PIL to tensor
@@ -82,7 +83,7 @@ class RPDataset(Dataset):
         pitch_size = 2 * self.max_pitch_angle + 1
         pitch_val = pitch_size - 1 if self.is_train else 1
         yaw_val = self.max_yaw_angle - 1 if self.is_train else self.max_yaw_angle
-        return len(self.subjects) * yaw_val * pitch_val 
+        return 100#len(self.subjects) * yaw_val * pitch_val 
 
     def get_render(self, subject, num_views, pitch=0, view_id=None, random_sample=False):
         '''
@@ -148,7 +149,7 @@ class RPDataset(Dataset):
             mask = Image.open(mask_path).convert('L')
             render = Image.open(render_path).convert('RGB')
 
-            if self.phase == 'train':
+            if self.phase == 'train' and self.num_views < 2:
                 # pad images
                 pad_size = int(0.1 * self.load_size)
                 render = ImageOps.expand(render, pad_size, fill=0)
@@ -221,7 +222,7 @@ class RPDataset(Dataset):
             'mask': torch.stack(mask_list, dim=0)
         }
 
-    def select_sampling_method(self, subject):
+    def select_sampling_method(self, subject, calib):
         mode = self.opt.sampling_mode if self.is_train else 'uniform_10k'
         return self.load_points_sample(subject, mode)
     
@@ -319,18 +320,18 @@ class RPDataset(Dataset):
         try:
             sid = index % len(self.subjects)
             tmp = index // len(self.subjects)
-    
+
             # test use pitch == 0 only
             # also train doesn't use yaw == 0
             if self.is_train:
                 yaw_val = self.max_yaw_angle - 1
                 vid = tmp % yaw_val + 1
-                pid = tmp // yaw_val - self.max_pitch_angle
+                pid = tmp // yaw_val - self.max_pitch_angle + self.mean_pitch
                 pid = pid if pid < 0 else pid + 1
             else:
                 yaw_val = self.max_yaw_angle
                 vid = tmp % yaw_val
-                pid = 0
+                pid = self.mean_pitch
             # name of the subjects 'rp_xxxx_xxx'
             subject = self.subjects[sid]
             res = {
@@ -342,8 +343,8 @@ class RPDataset(Dataset):
                 'b_max': self.B_MAX,
             }
             render_data = self.get_render(subject, num_views=self.num_views, view_id=vid,
-                                          pitch=pid, random_sample=self.opt.random_multiview)
-            sample_data = self.select_sampling_method(subject)
+                                            pitch=pid, random_sample=self.opt.random_multiview)
+            sample_data = self.select_sampling_method(subject, render_data['calib'][0].numpy())
 
             res.update(render_data)
             res.update(sample_data)

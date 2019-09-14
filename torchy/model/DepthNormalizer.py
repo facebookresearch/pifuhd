@@ -7,11 +7,11 @@ class DepthNormalizer(nn.Module):
         super(DepthNormalizer, self).__init__()
         self.opt = opt
 
-    def forward(self, z, calibs=None, index_feat=None):
+    def forward(self, xyz, calibs=None, index_feat=None):
         '''
         normalize depth value
         args:
-            z: [B, 1, N] depth value
+            xyz: [B, 3, N] depth value
         '''
-        z_feat = z * (self.opt.loadSize // 2) / self.opt.z_size
+        z_feat = xyz[:,2:3,:] * (self.opt.loadSize // 2) / self.opt.z_size
         return z_feat

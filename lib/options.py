@@ -61,7 +61,7 @@ class BaseOptions():
         g_sample.add_argument('--num_pts_dic', type=int, default=5, help='# of pts dic you load')
 
         g_sample.add_argument('--max_pitch', type=int, default=45, help='max pitch angle')
-
+        g_sample.add_argument('--mean_pitch', type=int, default=0, help='pitch center')
         g_sample.add_argument('--sampling_otf', action='store_true', help='Sampling on the fly')
         g_sample.add_argument('--sampling_mode', type=str, default='sigma_5', help='Sampling file name.')
 
@@ -88,20 +88,29 @@ class BaseOptions():
         g_model.add_argument('--enc_dim', nargs='+', default=[3, 8, 16, 32, 64, 128], type=int,
                              help='# of dimensions of encoder')
 
-        # hgimp specify
+        # hgimp specific
         g_model.add_argument('--num_stack', type=int, default=4, help='# of hourglass')
         g_model.add_argument('--hg_depth', type=int, default=2, help='# of stacked layer of hourglass')
         g_model.add_argument('--hg_down', type=str, default='ave_pool', help='ave pool || conv64 || conv128')
         g_model.add_argument('--hg_dim', type=int, default='256', help='256 | 512')
         g_model.add_argument('--use_sigmoid', action='store_true', help='use sigmoid function in fanimp or not')
 
+        # volumetric encoder
+        g_model.add_argument('--sp_no_pifu', action='store_true', help='cut fcn feature for debug')
+        g_model.add_argument('--sp_enc_type', type=str, default='z', help='spatial encoding [ z | vol_enc ]')
+        g_model.add_argument('--vol_net', type=str, default='unet', help='[ unet | hg ]')
+        g_model.add_argument('--vol_norm', type=str, default='batch', help='normalization for volume branch')
+        g_model.add_argument('--vol_ch', type=int, default=16, help='channel size for volume branch')
+        g_model.add_argument('--vol_hg_depth', type=int, default=2, help='depth of hourglass in volume branch')
+
         # Classification General
         g_model.add_argument('--mlp_dim', nargs='+', default=[257, 1024, 512, 256, 128, 1], type=int,
                              help='# of dimensions of mlp')
         g_model.add_argument('--mlp_dim_color', nargs='+', default=[513, 1024, 512, 256, 128, 3],
                              type=int, help='# of dimensions of color mlp')
+        g_model.add_argument('--mlp_res_layers', nargs='+', default=[1,2,3,4], type=int,
+                             help='leyers that has skip connection. use 0 for no residual pass')
         g_model.add_argument('--begin_mlp', type=int, default=0, help='# of skip mlp layer')
-
         g_model.add_argument('--skip_z', action='store_true',
                              help='do not use z as the feature.')
 
@@ -109,7 +118,6 @@ class BaseOptions():
         parser.add_argument('--random_flip', action='store_true', help='if random flip')
         parser.add_argument('--random_trans', action='store_true', help='if random flip')
         parser.add_argument('--random_scale', action='store_true', help='if random flip')
-        parser.add_argument('--no_residual', action='store_true', help='no skip connection in mlp')
         parser.add_argument('--schedule', type=int, nargs='+', default=[10, 15],
                             help='Decrease learning rate at these epochs.')
         parser.add_argument('--gamma', type=float, default=0.1, help='LR is multiplied by gamma on schedule.')
@@ -182,4 +190,8 @@ class BaseOptions():
 
     def parse(self):
         opt = self.gather_options()
+
+        if len(opt.mlp_res_layers) == 1 and opt.mlp_res_layers[0] < 1:
+            opt.mlp_res_layers = []
+
         return opt

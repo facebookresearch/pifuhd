@@ -2,6 +2,7 @@ import os
 import random
 
 import numpy as np 
+from numpy.linalg import inv
 from PIL import Image, ImageOps
 from PIL.ImageFilter import GaussianBlur
 import cv2
@@ -52,7 +53,7 @@ class RPOtfDataset(RPDataset):
             for i in tqdm(range(self.opt.num_pts_dic)):
                 self.mesh_dic = {**self.mesh_dic, **(np.load(os.path.join(self.DICT, 'trimesh_dic%d.npy' % i)).item())}
 
-    def select_sampling_method(self, subject):
+    def select_sampling_method(self, subject, calib):
         # test only
         if not self.is_train:
              np.random.seed(1991)
@@ -62,12 +63,20 @@ class RPOtfDataset(RPDataset):
             sample_points = surface_points + np.random.normal(scale=self.opt.sigma_max, size=surface_points.shape)
         if self.opt.sampling_mode == 'uniform':
             # add random points within image space
-            length = self.B_MAX - self.B_MIN
-            sample_points = np.random.rand(self.num_sample_inout, 3) * length + self.B_MIN
+            random_points = np.concatenate(
+                [2.0 * np.random.rand(self.num_sample_inout, 3) - 1.0, np.ones((self.num_sample_inout, 1))],
+                1)  # [-1,1]
+            random_points = np.matmul(random_points, inv(calib).T)[:, :3]
+            # length = self.B_MAX - self.B_MIN
+            # sample_points = np.random.rand(self.num_sample_inout, 3) * length + self.B_MIN
         elif 'uniform' in self.opt.sampling_mode:
             # add random points within image space
-            length = self.B_MAX - self.B_MIN
-            random_points = np.random.rand(self.num_sample_inout // 4, 3) * length + self.B_MIN
+            random_points = np.concatenate(
+                [2.0 * np.random.rand(self.num_sample_inout, 3) - 1.0, np.ones((self.num_sample_inout, 1))],
+                1)  # [-1,1]
+            random_points = np.matmul(random_points, inv(calib).T)[:, :3]
+            # length = self.B_MAX - self.B_MIN
+            # random_points = np.random.rand(self.num_sample_inout // 4, 3) * length + self.B_MIN
             sample_points = np.concatenate([sample_points, random_points], 0)
             np.random.shuffle(sample_points)
 

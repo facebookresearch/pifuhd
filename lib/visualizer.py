@@ -10,18 +10,23 @@ class Visualizer():
         self.name = opt.name
         self.opt = opt
 
-        try:
-            self.vis = visdom.Visdom(server='http://localhost', port=opt.display_port, use_incoming_socket=False)
-        except:
-            self.vis = visdom.Visdom(server='http://localhost', port=opt.display_port)
+        if opt.display_port < 0:
+            self.vis = None
+        else:
+            try:
+                self.vis = visdom.Visdom(server='http://localhost', port=opt.display_port, use_incoming_socket=False)
+            except:
+                self.vis = visdom.Visdom(server='http://localhost', port=opt.display_port)
 
-        assert self.display_id > 0, 'please set display_id > 0'
+            assert self.display_id > 0, 'please set display_id > 0'
 
     def plot_current_losses(self, epoch, counter_ratio, losses):
         ### args
         # losses: dictionary type (ex: losses['mse'] = 1.0)
         # epoch: int type (ex: epoch = 2)
         # counter_ratio: float type (ex: counter_ratio = 0.12)
+        if self.vis is None:
+            return
 
         if not hasattr(self, 'plot_data'):
             self.plot_data = {'X': [], 'Y': [], 'legend': list(losses.keys())}
@@ -44,6 +49,8 @@ class Visualizer():
         # losses: dictionary type (ex: losses['mse'] = 1.0)
         # epoch: int type (ex: epoch = 2)
         # counter_ratio: float type (ex: counter_ratio = 0.12)
+        if self.vis is None:
+            return
 
         if not hasattr(self, 'plot_test_data'):
             self.plot_test_data = {'X': [], 'Y': [], 'legend': list(losses.keys())}
@@ -65,7 +72,9 @@ class Visualizer():
         ### args
         # epoch: (int)
         # visuals: (dict)
-
+        if self.vis is None:
+            return
+            
         for idx, key in enumerate(visuals.keys()):
             img = visuals[key][0]
 

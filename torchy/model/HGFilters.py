@@ -94,58 +94,61 @@ class HourGlass(nn.Module):
         
 
 class HGFilter(nn.Module):
-    def __init__(self, opt):
+    def __init__(self, stack, depth, last_ch, norm='batch', down_type='conv64', use_sigmoid=True):
         super(HGFilter, self).__init__()
-        self.n_stack = opt.num_stack
-
-        self.opt = opt
+        self.n_stack = stack
+        self.use_sigmoid = use_sigmoid
+        self.depth = depth
+        self.last_ch = last_ch
+        self.norm = norm
+        self.down_type = down_type
 
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3)
 
-        if self.opt.norm == 'batch':
+        if self.norm == 'batch':
             self.bn1 = nn.BatchNorm2d(64)
-        elif self.opt.norm == 'group':
+        elif self.norm == 'group':
             self.bn1 = nn.GroupNorm(32, 64)
 
-        if self.opt.hg_down == 'conv64':
-            self.conv2 = ConvBlock(64, 64, self.opt.norm)
+        if self.down_type == 'conv64':
+            self.conv2 = ConvBlock(64, 64, self.norm)
             self.down_conv2 = nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1)
-        elif self.opt.hg_down == 'conv128':
-            self.conv2 = ConvBlock(128, 128, self.opt.norm)
+        elif self.down_type == 'conv128':
+            self.conv2 = ConvBlock(128, 128, self.norm)
             self.down_conv2 = nn.Conv2d(128, 128, kernel_size=3, stride=2, padding=1)
-        elif self.opt.hg_down == 'ave_pool':
-            self.conv2 = ConvBlock(64, 128, self.opt.norm)
+        elif self.down_type == 'ave_pool':
+            self.conv2 = ConvBlock(64, 128, self.norm)
         
-        self.conv3 = ConvBlock(128, 128, self.opt.norm)
-        self.conv4 = ConvBlock(128, 256, self.opt.norm)
+        self.conv3 = ConvBlock(128, 128, self.norm)
+        self.conv4 = ConvBlock(128, 256, self.norm)
         
         # start stacking
         for stack in range(self.n_stack):
-            self.add_module('m' + str(stack), HourGlass(opt.hg_depth, 256, self.opt.norm))
+            self.add_module('m' + str(stack), HourGlass(self.depth, 256, self.norm))
 
-            self.add_module('top_m_' + str(stack), ConvBlock(256, 256, self.opt.norm))
+            self.add_module('top_m_' + str(stack), ConvBlock(256, 256, self.norm))
             self.add_module('conv_last' + str(stack),
                             nn.Conv2d(256, 256, kernel_size=1, stride=1, padding=0))
-            if self.opt.norm == 'batch':
+            if self.norm == 'batch':
                 self.add_module('bn_end' + str(stack), nn.BatchNorm2d(256))
-            elif self.opt.norm == 'group':
+            elif self.norm == 'group':
                 self.add_module('bn_end' + str(stack), nn.GroupNorm(32, 256))
             
             self.add_module('l' + str(stack),
-                            nn.Conv2d(256, opt.hg_dim, kernel_size=1, stride=1, padding=0))
+                            nn.Conv2d(256, self.last_ch, kernel_size=1, stride=1, padding=0))
             
             if stack < self.n_stack - 1:
                 self.add_module(
                     'bl' + str(stack), nn.Conv2d(256, 256, kernel_size=1, stride=1, padding=0))
                 self.add_module(
-                    'al' + str(stack), nn.Conv2d(opt.hg_dim, 256, kernel_size=1, stride=1, padding=0))
+                    'al' + str(stack), nn.Conv2d(self.last_ch, 256, kernel_size=1, stride=1, padding=0))
 
     def forward(self, x):
         x = F.relu(self.bn1(self.conv1(x)), True)
 
-        if self.opt.hg_down == 'ave_pool':
+        if self.down_type == 'ave_pool':
             x = F.avg_pool2d(self.conv2(x), 2, stride=2)
-        elif self.opt.hg_down == ['conv64', 'conv128']:
+        elif self.down_type == ['conv64', 'conv128']:
             x = self.conv2(x)
             x = self.down_conv2(x)
         else:
@@ -169,7 +172,7 @@ class HGFilter(nn.Module):
                        (self._modules['conv_last' + str(i)](ll)), True)
 
             tmp_out = self._modules['l' + str(i)](ll)
-            if self.opt.use_sigmoid:
+            if self.use_sigmoid:
                 outputs.append(nn.Tanh()(tmp_out))
             else:
                 outputs.append(tmp_out)

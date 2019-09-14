@@ -233,6 +233,7 @@ def train(opt):
     start_epoch = 0 if not opt.continue_train else opt.resume_epoch
     num_epoch = opt.num_iter // len(train_data_loader)
     cur_iter = start_epoch * len(train_data_loader)
+    max_IOU = 0.0
     for epoch in range(start_epoch, num_epoch):
         epoch_start_time = time.time()
 
@@ -305,11 +306,6 @@ def train(opt):
             set_eval()
             test_losses = {}
 
-            print('calc error (test) ...')
-            err = calc_error(opt, netG, cuda, test_dataset, 360, 'test')
-            print('eval: ', ''.join(['{}: {:.6f} '.format(k, v) for k,v in err.items()]))
-            test_losses.update(err)
-
             print('calc error (train) ...')
             train_dataset.is_train = False
             err = calc_error(opt, netG, cuda, train_dataset, 100, 'train')
@@ -317,22 +313,28 @@ def train(opt):
             print('eval: ', ''.join(['{}: {:.6f} '.format(k, v) for k,v in err.items()]))
             test_losses.update(err)
 
+            print('calc error (test) ...')
+            err = calc_error(opt, netG, cuda, test_dataset, 360, 'test')
+            if err['IOU(test)'] > max_IOU:
+                max_IOU = err['IOU(test)']
+            print('eval: ', ''.join(['{}: {:.6f} '.format(k, v) for k,v in err.items()]), 'bestIOU: %.3f' % max_IOU)
+            test_losses.update(err)
+
             vis.plot_current_test_losses(epoch, 0, test_losses)
           
+            print('generate mesh (train) ...')
+            for gen_idx in range(opt.num_gen_mesh_test):
+                train_data = random.choice(train_dataset)
+                save_path = '%s/%s/train_eval_epoch%d_%s.obj' % (
+                    opt.results_path, opt.name, epoch, train_data['name'])
+                gen_mesh(opt.resolution, netG, cuda, train_data, save_path)
+
             print('generate mesh (test) ...')
             for gen_idx in range(opt.num_gen_mesh_test):
                 test_data = random.choice(test_dataset)
                 save_path = '%s/%s/test_eval_epoch%d_%s.obj' % (
                     opt.results_path, opt.name, epoch, test_data['name'])
                 gen_mesh(opt.resolution, netG, cuda, test_data, save_path)
-
-            print('generate mesh (train) ...')
-            for gen_idx in range(opt.num_gen_mesh_test):
-                train_data = random.choice(train_dataset)
-                save_path = '%s/%s/train_eval_epoch%d_%s.obj' % (
-                    opt.results_path, opt.name, epoch, train_data['name'])
-                gen_mesh(opt.resolution//2, netG, cuda, train_data, save_path)
-
 
 if __name__ == '__main__':
     train(opt)

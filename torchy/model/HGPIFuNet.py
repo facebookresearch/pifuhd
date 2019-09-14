@@ -5,6 +5,7 @@ from .BasePIFuNet import BasePIFuNet
 from .MLP import MLP
 from .DepthNormalizer import DepthNormalizer
 from .HGFilters import *
+from .VolumetricEncoder import *
 from ..net_util import init_net
 
 class HGPIFuNet(BasePIFuNet):
@@ -25,16 +26,21 @@ class HGPIFuNet(BasePIFuNet):
 
         self.opt = opt
         self.num_views = self.opt.num_views
-
-        self.image_filter = HGFilter(opt)
+        self.image_filter = HGFilter(opt.num_stack, opt.hg_depth, opt.hg_dim, 
+                                     opt.norm, opt.hg_down, opt.use_sigmoid)
 
         self.mlp = MLP(
             filter_channels=self.opt.mlp_dim,
             num_views=self.num_views,
-            no_residual=self.opt.no_residual,
+            res_layers=self.opt.mlp_res_layers,
             last_op=nn.Sigmoid())
 
-        self.normalizer = DepthNormalizer(opt)
+        if self.opt.sp_enc_type == 'vol_enc':
+            self.spatial_enc = VolumetricEncoder(opt)
+        elif self.opt.sp_enc_type == 'z':
+            self.spatial_enc = DepthNormalizer(opt)
+        else:
+            raise NameError('unknown spatial encoding type')
 
         self.im_feat_list = []
         self.tmpx = None
@@ -51,6 +57,9 @@ class HGPIFuNet(BasePIFuNet):
         args:
             images: [B, C, H, W]
         '''
+        if self.opt.sp_enc_type == 'vol_enc':
+            self.spatial_enc.filter(images)
+
         self.im_feat_list, self.normx = self.image_filter(images)
         if not self.training:
             self.im_feat_list = [self.im_feat_list[-1]]
@@ -73,16 +82,17 @@ class HGPIFuNet(BasePIFuNet):
 
         xyz = self.projection(points, calibs, transforms)
         xy = xyz[:, :2, :]
-        z = xyz[:, 2:3, :]
 
-        z_feat = self.normalizer(z, calibs=calibs)
+        sp_feat = self.spatial_enc(xyz, calibs=calibs)
 
         self.intermediate_preds_list = []
 
         for im_feat in self.im_feat_list:
-            point_local_feat_list = [self.index(im_feat, xy), z_feat]
-            
-            point_local_feat = torch.cat(point_local_feat_list, 1)
+            if self.opt.sp_no_pifu:
+                point_local_feat = sp_feat
+            else:
+                point_local_feat_list = [self.index(im_feat, xy), sp_feat]            
+                point_local_feat = torch.cat(point_local_feat_list, 1)
 
             pred = self.mlp(point_local_feat)
             self.intermediate_preds_list.append(pred)
