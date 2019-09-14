@@ -48,7 +48,6 @@ class RPDataset(Dataset):
         self.max_yaw_angle = 360
         self.max_pitch_angle = 45 # that's for positive and negative
         self.interval_yaw = self.opt.interval_yaw
-        self.interval_pitch = self.opt.interval_pitch
 
         self.subjects = self.get_subjects()
 
@@ -81,14 +80,10 @@ class RPDataset(Dataset):
             return sorted(list(all_subjects))
 
     def __len__(self):
-        yaw_size = self.max_yaw_angle
-        intv_yaw = self.interval_yaw
         pitch_size = 2 * self.max_pitch_angle + 1
-        intv_pitch = self.interval_pitch
-
-        yaw_val = yaw_size - yaw_size // intv_yaw if self.is_train else yaw_size // intv_yaw
-        pitch_val = pitch_size - pitch_size // intv_pitch - 1 if self.is_train else pitch_size // intv_pitch + 1
-        return len(self.subjects) * yaw_val * pitch_val
+        pitch_val = pitch_size - 1 if self.is_train else 1
+        yaw_val = self.max_yaw_angle - 1 if self.is_train else self.max_yaw_angle
+        return len(self.subjects) * yaw_val * pitch_val 
 
     def get_render(self, subject, num_views, pitch=0, view_id=None, random_sample=False):
         '''
@@ -325,25 +320,18 @@ class RPDataset(Dataset):
         try:
             sid = index % len(self.subjects)
             tmp = index // len(self.subjects)
-
-            yaw_size = self.max_yaw_angle
-            intv_yaw = self.interval_yaw
-            pitch_size = 2 * self.max_pitch_angle + 1
-            intv_pitch = self.interval_pitch
-
-            yaw_val = yaw_size - yaw_size // intv_yaw if self.is_train else yaw_size // intv_yaw
-            pitch_val = pitch_size - pitch_size // intv_pitch - 1 if self.is_train else pitch_size // intv_pitch + 1
-
+    
+            # test use pitch == 0 only
+            # also train doesn't use yaw == 0
             if self.is_train:
-                vid = tmp % yaw_val
-                pid = tmp // yaw_val
-                vid = intv_yaw * (vid // (intv_yaw - 1)) + vid % (intv_yaw - 1) + 1
-                pid = intv_pitch * (pid // (intv_pitch- 1)) + pid % (intv_pitch - 1) + 1 - self.max_pitch_angle
+                yaw_val = self.max_yaw_angle - 1
+                vid = tmp % yaw_val + 1
+                pid = tmp // yaw_val - self.max_pitch_angle
+                pid = pid if pid < 0 else pid + 1
             else:
+                yaw_val = self.max_yaw_angle
                 vid = tmp % yaw_val
-                pid = tmp // yaw_val
-                vid = intv_yaw * vid
-                pid = intv_pitch * pid - self.max_pitch_angle
+                pid = 0
             # name of the subjects 'rp_xxxx_xxx'
             subject = self.subjects[sid]
             res = {

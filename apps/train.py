@@ -304,7 +304,7 @@ def train(opt):
             test_losses = {}
 
             print('calc error (test) ...')
-            err = calc_error(opt, netG, cuda, test_dataset, 100, 'test')
+            err = calc_error(opt, netG, cuda, test_dataset, 360, 'test')
             print('eval: ', ''.join(['{}: {:.6f} '.format(k, v) for k,v in err.items()]))
             test_losses.update(err)
 
