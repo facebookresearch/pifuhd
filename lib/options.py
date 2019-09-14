@@ -92,7 +92,7 @@ class BaseOptions():
         g_model.add_argument('--num_stack', type=int, default=4, help='# of hourglass')
         g_model.add_argument('--hg_depth', type=int, default=2, help='# of stacked layer of hourglass')
         g_model.add_argument('--hg_down', type=str, default='ave_pool', help='ave pool || conv64 || conv128')
-        g_model.add_argument('--hg_dim', type=int, default='256', help='256 | 512')
+        g_model.add_argument('--hg_dim', type=int, default=256, help='256 | 512')
         g_model.add_argument('--use_sigmoid', action='store_true', help='use sigmoid function in fanimp or not')
 
         # volumetric encoder
@@ -104,9 +104,9 @@ class BaseOptions():
         g_model.add_argument('--vol_hg_depth', type=int, default=2, help='depth of hourglass in volume branch')
 
         # Classification General
-        g_model.add_argument('--mlp_dim', nargs='+', default=[257, 1024, 512, 256, 128, 1], type=int,
-                             help='# of dimensions of mlp')
-        g_model.add_argument('--mlp_dim_color', nargs='+', default=[513, 1024, 512, 256, 128, 3],
+        g_model.add_argument('--mlp_dim', nargs='+', default=[1024, 512, 256, 128, 1], type=int,
+                             help='# of dimensions of mlp. no need to put the first channel')
+        g_model.add_argument('--mlp_dim_color', nargs='+', default=[1024, 512, 256, 128, 3],
                              type=int, help='# of dimensions of color mlp')
         g_model.add_argument('--mlp_res_layers', nargs='+', default=[1,2,3,4], type=int,
                              help='leyers that has skip connection. use 0 for no residual pass')
@@ -193,5 +193,12 @@ class BaseOptions():
 
         if len(opt.mlp_res_layers) == 1 and opt.mlp_res_layers[0] < 1:
             opt.mlp_res_layers = []
+        
+        if opt.sp_enc_type == 'vol_enc':
+            opt.name = '%s_p%d.%d_%s%d_np%d' % (opt.name, opt.mean_pitch, opt.max_pitch, opt.vol_net, opt.vol_ch, int(opt.sp_no_pifu))
+            opt.mlp_dim = [opt.vol_ch if opt.sp_no_pifu else opt.vol_ch + opt.hg_dim] + opt.mlp_dim
+        else:
+            opt.name = '%s_p%d.%d' % (opt.name, opt.mean_pitch, opt.max_pitch)
+            opt.mlp_dim = [opt.hg_dim + 1] + opt.mlp_dim
 
         return opt
