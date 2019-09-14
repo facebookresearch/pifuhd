@@ -83,7 +83,7 @@ class RPDataset(Dataset):
         pitch_size = 2 * self.max_pitch_angle + 1
         pitch_val = pitch_size - 1 if self.is_train else 1
         yaw_val = self.max_yaw_angle - 1 if self.is_train else self.max_yaw_angle
-        return 100#len(self.subjects) * yaw_val * pitch_val 
+        return len(self.subjects) * yaw_val * pitch_val 
 
     def get_render(self, subject, num_views, pitch=0, view_id=None, random_sample=False):
         '''
