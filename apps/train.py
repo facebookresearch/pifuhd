@@ -12,6 +12,7 @@ import random
 import torch
 from tqdm import tqdm
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 
 from lib.options import BaseOptions
 from lib.visualizer import Visualizer
@@ -22,6 +23,8 @@ from torchy.model import *
 from torchy.geometry import index
 
 opt = BaseOptions().parse()
+
+writer = SummaryWriter(log_dir="./logs/%s" % opt.name)
 
 def reshape_multiview_tensors(image_tensor, calib_tensor):
     '''
@@ -159,10 +162,10 @@ def calc_error(opt, net, cuda, dataset, num_tests, label=None):
     
     if label is not None:
         return {
-            'MSE(%s)' % label: np.average(error_arr),
-            'IOU(%s)' % label: np.average(IOU_arr),
-            'prec(%s)' % label: np.average(prec_arr),
-            'recall(%s)' % label: np.average(recall_arr),
+            'MSE-%s' % label: np.average(error_arr),
+            'IOU-%s' % label: np.average(IOU_arr),
+            'prec-%s' % label: np.average(prec_arr),
+            'recall-%s' % label: np.average(recall_arr),
         }
     else:
         return {
@@ -312,13 +315,17 @@ def train(opt):
             train_dataset.is_train = True
             print('eval: ', ''.join(['{}: {:.6f} '.format(k, v) for k,v in err.items()]))
             test_losses.update(err)
+            for k, v in err.items():
+                writer.add_scalar('%s/%s' % (k.split('-')[0],'train'), v, cur_iter)
 
             print('calc error (test) ...')
             err = calc_error(opt, netG, cuda, test_dataset, 360, 'test')
-            if err['IOU(test)'] > max_IOU:
-                max_IOU = err['IOU(test)']
+            if err['IOU-test'] > max_IOU:
+                max_IOU = err['IOU-test']
             print('eval: ', ''.join(['{}: {:.6f} '.format(k, v) for k,v in err.items()]), 'bestIOU: %.3f' % max_IOU)
             test_losses.update(err)
+            for k, v in err.items():
+                writer.add_scalar('%s/%s' % (k.split('-')[0],'test'), v, cur_iter)
 
             vis.plot_current_test_losses(epoch, 0, test_losses)
           
