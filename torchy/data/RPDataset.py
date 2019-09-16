@@ -35,8 +35,8 @@ class RPDataset(Dataset):
         self.SAMPLE = os.path.join(self.root, 'GEO', 'SAMPLE')
 
         # where does this come from??
-        self.B_MIN = np.array([-128, -28, -128])
-        self.B_MAX = np.array([128, 228, 128])
+        self.B_MIN = np.array([-120, -20, -64])
+        self.B_MAX = np.array([120, 220, 64])
 
         self.load_size = self.opt.loadSize
 
@@ -339,6 +339,7 @@ class RPDataset(Dataset):
                 'mesh_path': os.path.join(self.OBJ, subject + '.obj'),
                 'sid': sid,
                 'vid': vid,
+                'pid': pid,
                 'b_min': self.B_MIN,
                 'b_max': self.B_MAX,
             }

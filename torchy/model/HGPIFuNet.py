@@ -88,7 +88,7 @@ class HGPIFuNet(BasePIFuNet):
         self.intermediate_preds_list = []
 
         for im_feat in self.im_feat_list:
-            if self.opt.sp_no_pifu:
+            if self.opt.sp_enc_type == 'vol_enc' and self.opt.sp_no_pifu:
                 point_local_feat = sp_feat
             else:
                 point_local_feat_list = [self.index(im_feat, xy), sp_feat]            

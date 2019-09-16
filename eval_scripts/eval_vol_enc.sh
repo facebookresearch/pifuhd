@@ -8,7 +8,7 @@ DATAROOT='/home/shunsukesaito/data/hf_human'
 GPU_ID=0
 DISPLAY_ID=$((GPU_ID*10+10))
 DISPLAY_PORT=8097
-NAME='vol_enc_debug'
+NAME='devfair'
 
 SAMPLE_MODE='sigma/uniform'
 PROB_MIN=0.6
@@ -27,7 +27,7 @@ MLP_DIM_COLOR='513 1024 512 256 128 3'
 MLP_RES_LAYERS='2'
 NUM_SAMPLE=5000
 NUM_THREADS=1
-VOL_RES=256
+VOL_RES=512
 
 AUG_BRI=0.2
 AUG_CON=0.2
@@ -37,8 +37,8 @@ AUG_GRY=0.1
 
 MAX_PITCH=45
 
-SPENC_TYPE='vol_enc'
-VOL_NET='hg'
+SPENC_TYPE='z'
+VOL_NET='unet'
 VOL_CH=32
 VOL_HG_DEPTH=3
 
@@ -48,7 +48,7 @@ RESULTS_PATH='./results'
 NETG='hgpifu'
 
 # command
-CUDA_VISIBLE_DEVICES=${GPU_ID} python ./apps/train.py \
+CUDA_VISIBLE_DEVICES=${GPU_ID} python ./apps/test.py \
     --display_id ${DISPLAY_ID} \
     --display_port ${DISPLAY_PORT} \
     --dataroot ${DATAROOT} \
@@ -94,5 +94,7 @@ CUDA_VISIBLE_DEVICES=${GPU_ID} python ./apps/train.py \
     --vol_norm 'batch' \
     --vol_hg_depth ${VOL_HG_DEPTH} \
     --vol_ch ${VOL_CH} \
-    --vol_net ${VOL_NET}
-
+    --vol_net ${VOL_NET} \
+    --resume_epoch 19 \
+    --mean_pitch 45 \
+    --sp_no_pifu

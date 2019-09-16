@@ -18,7 +18,7 @@ class VolumetricEncoder(nn.Module):
         if self.opt.vol_net == 'hg':
             self.vol_enc = HGFilter3D(self.vol_ch, 1, 2, self.vol_ch, opt.vol_norm, 'ave_pool', False)
         elif self.opt.vol_net == 'unet':
-            self.vol_enc = UnetGenerator(self.vol_ch, self.vol_ch, ngf=2*self.vol_ch)
+            self.vol_enc = UnetGenerator(self.vol_ch, self.vol_ch, ngf=2*self.vol_ch, norm=opt.vol_norm)
 
         self.vol_feat = None
     

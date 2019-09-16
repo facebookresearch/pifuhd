@@ -52,6 +52,8 @@ class BaseOptions():
         # Testing related
         g_test = parser.add_argument_group('Testing')
         g_test.add_argument('--resolution', type=int, default=512, help='# of grid in mesh reconstruction')
+        g_test.add_argument('--no_numel_eval', action='store_true', help='no numerical evaluation')
+        g_test.add_argument('--no_mesh_recon', action='store_true', help='no mesh reconstruction')
 
         # Sampling related
         g_sample = parser.add_argument_group('Sampling')
