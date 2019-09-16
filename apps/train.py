@@ -284,7 +284,7 @@ def train(opt):
                                                                         iter_start_time - iter_data_time,
                                                                         iter_net_time - iter_start_time, int(eta // 60),
                     int(eta - 60 * (eta // 60))))
-            break
+            
             if train_idx % opt.freq_save == 100 and train_idx != 0:
                 torch.save(netG.state_dict(), '%s/%s_train_epoch_%d' % (opt.checkpoints_path, opt.name, epoch))
 
