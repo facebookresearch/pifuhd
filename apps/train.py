@@ -102,6 +102,9 @@ def adjust_learning_rate(optimizer, epoch, lr, schedule, gamma):
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
     return lr
+
+def linear_anneal_sigma(opt, cur_epoch, n_epoch):
+    opt.sigma = (opt.sigma_min - opt.sigma_max) * cur_epoch / float(n_epoch - 1) + opt.sigma_max
    
 def compute_acc(pred, gt, thresh=0.5):
     '''
@@ -240,6 +243,9 @@ def train(opt):
     for epoch in range(start_epoch, num_epoch):
         epoch_start_time = time.time()
 
+        if opt.linear_anneal_sigma:
+            linear_anneal_sigma(opt, epoch, num_epoch)
+
         set_train()
         for train_idx, train_data in  enumerate(train_data_loader):
             iter_data_time = time.time()
@@ -273,12 +279,12 @@ def train(opt):
                     iter_net_time - epoch_start_time)
             
             print(
-                'Name: {0} | Epoch: {1}/{2} | {3}/{4} | Err: {5:05f} | LR: {6:.1e} | dataT: {7:04f} | netT: {8:04f} | ETA: {9:02d}:{10:02d}'.format(
-                    opt.name, epoch, num_epoch, train_idx, len(train_data_loader), errG.item(), lr,
+                'Name: {0} | Epoch: {1}/{2} | {3}/{4} | Err: {5:05f} | LR: {6:.1e} | SIG: {7:.1e} | dataT: {8:04f} | netT: {9:04f} | ETA: {10:02d}:{11:02d}'.format(
+                    opt.name, epoch, num_epoch, train_idx, len(train_data_loader), errG.item(), lr, opt.sigma,
                                                                         iter_start_time - iter_data_time,
                                                                         iter_net_time - iter_start_time, int(eta // 60),
                     int(eta - 60 * (eta // 60))))
-            
+            break
             if train_idx % opt.freq_save == 100 and train_idx != 0:
                 torch.save(netG.state_dict(), '%s/%s_train_epoch_%d' % (opt.checkpoints_path, opt.name, epoch))
 

@@ -93,7 +93,7 @@ class RPOtfDataset(RPDataset):
 
             if 'sigma' in self.opt.sampling_mode:
                 surface_points, fid = trimesh.sample.sample_surface_even(mesh, 4 * self.num_sample_inout)
-                sample_points = surface_points + np.random.normal(scale=self.opt.sigma_max, size=surface_points.shape)
+                sample_points = surface_points + np.random.normal(scale=self.opt.sigma, size=surface_points.shape)
             if self.opt.sampling_mode == 'uniform':
                 # add random points within image space
                 length = self.B_MAX - self.B_MIN
@@ -131,7 +131,7 @@ class RPOtfDataset(RPDataset):
         mesh = self.mesh_dic[subject]
         if 'sigma' in self.opt.sampling_mode:
             surface_points, fid = trimesh.sample.sample_surface(mesh, 4 * self.num_sample_inout)
-            sample_points = surface_points + np.random.normal(scale=self.opt.sigma_max, size=surface_points.shape)
+            sample_points = surface_points + np.random.normal(scale=self.opt.sigma, size=surface_points.shape)
         if self.opt.sampling_mode == 'uniform':
             # add random points within image space
             random_points = np.concatenate(

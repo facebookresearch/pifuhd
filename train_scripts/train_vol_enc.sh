@@ -12,6 +12,7 @@ NAME='vol_enc_debug'
 
 SAMPLE_MODE='sigma/uniform'
 SIGMA_MAX=5.0
+SIGMA_MIN=1.0
 
 NUM_ITER=100000
 NUM_VIEWS=1
@@ -73,6 +74,7 @@ CUDA_VISIBLE_DEVICES=${GPU_ID} python ./apps/train.py \
     --sampling_mode ${SAMPLE_MODE} \
     --sampling_otf \
     --sigma_max ${SIGMA_MAX} \
+    --sigma_min ${SIGMA_MIN} \
     --num_pts_dic 5 \
     --norm 'group' \
     --freq_save_ply 5000 \
@@ -84,5 +86,8 @@ CUDA_VISIBLE_DEVICES=${GPU_ID} python ./apps/train.py \
     --vol_norm 'batch' \
     --vol_hg_depth ${VOL_HG_DEPTH} \
     --vol_ch ${VOL_CH} \
-    --vol_net ${VOL_NET}
+    --vol_net ${VOL_NET} \
+    --linear_anneal_sigma \
+    --no_numel_eval \
+    --no_mesh_recon
 

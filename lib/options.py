@@ -66,7 +66,10 @@ class BaseOptions():
         g_sample.add_argument('--mean_pitch', type=int, default=0, help='pitch center')
         g_sample.add_argument('--sampling_otf', action='store_true', help='Sampling on the fly')
         g_sample.add_argument('--sampling_mode', type=str, default='sigma', help='Sampling file name.')
-        g_sample.add_argument('--sigma_max', type=float, default=0.0, help='augmentation blur')
+        g_sample.add_argument('--linear_anneal_sigma', action='store_true', help='linear annealing of sigma')
+        g_sample.add_argument('--sigma_max', type=float, default=0.0, help='maximum sigma for sampling')
+        g_sample.add_argument('--sigma_min', type=float, default=0.0, help='minimum sigma for sampling')
+        g_sample.add_argument('--sigma', type=float, default=1.0, help='sigma for sampling')
 
         g_sample.add_argument('--z_size', type=float, default=200.0, help='z normalization factor')
 
@@ -117,7 +120,6 @@ class BaseOptions():
         parser.add_argument('--schedule', type=int, nargs='+', default=[10, 15],
                             help='Decrease learning rate at these epochs.')
         parser.add_argument('--gamma', type=float, default=0.1, help='LR is multiplied by gamma on schedule.')
-        parser.add_argument('--sigma', type=float, default=0.1, help='perturbation standard deviation for positions')
         parser.add_argument('--lambda_inout', type=float, default=1, help='weight of input loss')
         parser.add_argument('--lambda_color', type=float, default=1, help='weight of color loss')
         parser.add_argument('--lambda_gan', type=float, default=1, help='weight of color gan loss')
@@ -186,6 +188,8 @@ class BaseOptions():
 
     def parse(self):
         opt = self.gather_options()
+
+        opt.sigma = opt.sigma_max
 
         if len(opt.mlp_res_layers) == 1 and opt.mlp_res_layers[0] < 1:
             opt.mlp_res_layers = []
