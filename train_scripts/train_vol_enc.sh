@@ -33,7 +33,7 @@ AUG_GRY=0.1
 MAX_PITCH=45
 
 SPENC_TYPE='vol_enc'
-VOL_NET='hg'
+VOL_NET='unet'
 VOL_CH=32
 VOL_HG_DEPTH=3
 

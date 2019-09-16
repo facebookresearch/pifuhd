@@ -294,6 +294,7 @@ def train(opt):
                 counter_ratio = train_idx / len(train_data_loader)
 
                 vis.plot_current_losses(epoch, counter_ratio, losses)
+                writer.add_scalar('total_loss/train', losses['train_mse'], cur_iter)
 
             if train_idx % opt.freq_save_image == 0:
                 visuals = {}
