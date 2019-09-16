@@ -12,7 +12,6 @@ import random
 import torch
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
 
 from lib.options import BaseOptions
 from lib.visualizer import Visualizer
@@ -23,8 +22,6 @@ from torchy.model import *
 from torchy.geometry import index
 
 opt = BaseOptions().parse()
-
-writer = SummaryWriter(log_dir="./logs/%s" % opt.name)
 
 def reshape_multiview_tensors(image_tensor, calib_tensor):
     '''

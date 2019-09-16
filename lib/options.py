@@ -65,13 +65,7 @@ class BaseOptions():
         g_sample.add_argument('--max_pitch', type=int, default=45, help='max pitch angle')
         g_sample.add_argument('--mean_pitch', type=int, default=0, help='pitch center')
         g_sample.add_argument('--sampling_otf', action='store_true', help='Sampling on the fly')
-        g_sample.add_argument('--sampling_mode', type=str, default='sigma_5', help='Sampling file name.')
-
-        g_sample.add_argument('--thick_min', type=float, default=0.0, help='augmentation blur')
-        g_sample.add_argument('--thick_max', type=float, default=0.0, help='augmentation blur')
-        g_sample.add_argument('--prob_min', type=float, default=0.0, help='augmentation blur')
-        g_sample.add_argument('--prob_max', type=float, default=0.0, help='augmentation blur')
-        g_sample.add_argument('--sigma_min', type=float, default=0.0, help='augmentation blur')
+        g_sample.add_argument('--sampling_mode', type=str, default='sigma', help='Sampling file name.')
         g_sample.add_argument('--sigma_max', type=float, default=0.0, help='augmentation blur')
 
         g_sample.add_argument('--z_size', type=float, default=200.0, help='z normalization factor')

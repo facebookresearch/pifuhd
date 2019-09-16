@@ -11,12 +11,7 @@ DISPLAY_PORT=8097
 NAME='vol_enc_debug'
 
 SAMPLE_MODE='sigma/uniform'
-PROB_MIN=0.6
-PROB_MAX=1.0
-SIGMA_MIN=1.0
 SIGMA_MAX=5.0
-THICK_MIN=0.005
-THICK_MAX=0.02
 
 NUM_ITER=100000
 NUM_VIEWS=1
@@ -77,11 +72,6 @@ CUDA_VISIBLE_DEVICES=${GPU_ID} python ./apps/train.py \
     --max_pitch ${MAX_PITCH} \
     --sampling_mode ${SAMPLE_MODE} \
     --sampling_otf \
-    --prob_min ${PROB_MIN} \
-    --prob_max ${PROB_MAX} \
-    --thick_min ${THICK_MIN} \
-    --thick_max ${THICK_MAX} \
-    --sigma_min ${SIGMA_MIN} \
     --sigma_max ${SIGMA_MAX} \
     --num_pts_dic 5 \
     --norm 'group' \
