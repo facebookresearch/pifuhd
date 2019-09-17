@@ -195,7 +195,7 @@ class BaseOptions():
             opt.mlp_res_layers = []
         
         if opt.sp_enc_type == 'vol_enc':
-            opt.name = '%s_p%d.%d_%s%d_np%d' % (opt.name, opt.mean_pitch, opt.max_pitch, opt.vol_net, opt.vol_ch, int(opt.sp_no_pifu))
+            opt.name = '%s_p%d.%d_%s%d_np%d_s%1.f.%1.f' % (opt.name, opt.mean_pitch, opt.max_pitch, opt.vol_net, opt.vol_ch, int(opt.sp_no_pifu), opt.sigma_min, opt.sigma_max)
             opt.mlp_dim = [opt.vol_ch if opt.sp_no_pifu else opt.vol_ch + opt.hg_dim] + opt.mlp_dim
         else:
             opt.name = '%s_p%d.%d' % (opt.name, opt.mean_pitch, opt.max_pitch)

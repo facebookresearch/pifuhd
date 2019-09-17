@@ -287,6 +287,7 @@ def train(opt):
             
             if train_idx % opt.freq_save == 100 and train_idx != 0:
                 torch.save(netG.state_dict(), '%s/%s_train_epoch_%d' % (opt.checkpoints_path, opt.name, epoch))
+                torch.save(netG.state_dict(), '%s/%s_train_latest' % (opt.checkpoints_path, opt.name))
 
             if train_idx % opt.freq_save_ply == 0 and train_idx != 0:
                 save_path = '%s/%s/test_epoch%d_idx%d.ply' % (opt.results_path, opt.name, epoch, train_idx)
