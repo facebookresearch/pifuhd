@@ -123,6 +123,34 @@ class RPOtfDataset(RPDataset):
             np.save(inside_file, inside_points)
             np.save(outside_file, outside_points)
 
+    def precompute_tsdf(self, subject, num_files=100, sigma=1.0):
+        TSDF_DIR = os.path.join(self.TSDF, self.opt.sampling_mode, subject)
+
+        mesh = self.mesh_dic[subject]
+
+        for i in tqdm(range(num_files)):
+            tsdf_file = os.path.join(TSDF_DIR, '%05d.xyzd' % i)
+
+            if 'sigma' in self.opt.sampling_mode:
+                surface_points, fid = trimesh.sample.sample_surface_even(mesh, self.num_sample_inout)
+                sample_points = surface_points + np.random.normal(scale=self.opt.sigma, size=surface_points.shape)
+                sample_points = sample_points[:(3*self.num_sample_inout//4)]
+            if self.opt.sampling_mode == 'uniform':
+                length = self.B_MAX - self.B_MIN
+                sample_points = np.random.rand(self.num_sample_inout, 3) * length + self.B_MIN
+            elif 'uniform' in self.opt.sampling_mode:
+                length = self.B_MAX - self.B_MIN
+                random_points = np.random.rand(self.num_sample_inout // 4, 3) * length + self.B_MIN
+                sample_points = np.concatenate([sample_points, random_points], 0)
+            dist = signed_distance(mesh, sample_points)
+            dist /= sigma
+            dist = dist.clip(-1, 1)
+            sample_points = np.concatenate([sample_points, dist[:,None]], 1)
+
+            os.makedirs(TSDF_DIR, exist_ok=True)
+            np.save(tsdf_file, sample_points)
+              
+
     def select_sampling_method(self, subject, calib):
         # test only
         if not self.is_train:

@@ -33,6 +33,18 @@ def precompute_points(opt):
     for sub in subjects:
         dataset.precompute_points(sub, num_files=100)
 
+def precompute_tsdf(opt):
+    cuda = torch.device('cuda:%d' % opt.gpu_id)
+
+    dataset = RPOtfDataset(opt, phase='train')
+
+    subjects = dataset.get_subjects()
+
+    for sub in subjects:
+        dataset.precompute_tsdf(sub, num_files=100, sigma=3.0)
+
+
 if __name__ == '__main__':
-    precompute_points(opt)
+    # precompute_points(opt)
+    precompute_tsdf(opt)
   

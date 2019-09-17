@@ -33,7 +33,8 @@ class RPDataset(Dataset):
         self.VOL = os.path.join(self.root, 'VOL')
         self.OBJ = os.path.join(self.root, 'GEO', 'OBJ')
         self.SAMPLE = os.path.join(self.root, 'GEO', 'SAMPLE')
-
+        self.TSDF = os.path.join(self.root, 'GEO', 'TSDF')
+        
         self.B_MIN = np.array([-128, -28, -128])
         self.B_MAX = np.array([128, 228, 128])
         # self.B_MIN = np.array([-120, -20, -64])
