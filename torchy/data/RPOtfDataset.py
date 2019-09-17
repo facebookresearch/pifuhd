@@ -179,6 +179,11 @@ class RPOtfDataset(RPDataset):
             sample_points = np.concatenate([sample_points, random_points], 0)
             np.random.shuffle(sample_points)
 
+        inbb = np.matmul(np.concatenate([sample_points, np.ones((sample_points.shape[0],1))], 1), calib.T)[:, :3]
+        inbb = (inbb[:, 0] >= -1) & (inbb[:, 0] <= 1) & (inbb[:, 1] >= -1) & \
+               (inbb[:, 1] <= 1) & (inbb[:, 2] >= -1) & (inbb[:, 2] <= 1)
+
+        sample_points = sample_points[inbb]
         inside = mesh.contains(sample_points)
         inside_points = sample_points[inside]
         outside_points = sample_points[np.logical_not(inside)]

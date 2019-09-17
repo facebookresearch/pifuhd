@@ -205,7 +205,7 @@ def train(opt):
                                   num_workers=opt.num_threads, pin_memory=opt.pin_memory)
     print('test data size: ', len(test_data_loader))
 
-    ls_thresh = 0.5 if not opt.use_tsdf else 0.0 # set level set boundary
+    ls_thresh = 0.5 # level set boundary
     netG = HGPIFuNet(opt, projection_mode).to(device=cuda)
     optimizerG = torch.optim.RMSprop(netG.parameters(), lr=opt.learning_rate, momentum=0, weight_decay=0)
     lr = opt.learning_rate

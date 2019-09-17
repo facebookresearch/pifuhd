@@ -33,7 +33,7 @@ class HGPIFuNet(BasePIFuNet):
             filter_channels=self.opt.mlp_dim,
             num_views=self.num_views,
             res_layers=self.opt.mlp_res_layers,
-            last_op=nn.Sigmoid() if not self.opt.use_tsdf else nn.Tanh())
+            last_op=nn.Sigmoid())
 
         if self.opt.sp_enc_type == 'vol_enc':
             self.spatial_enc = VolumetricEncoder(opt)
@@ -77,11 +77,16 @@ class HGPIFuNet(BasePIFuNet):
         return:
             [B, C, N] prediction
         '''
-        if labels is not None:
-            self.labels = labels
-
         xyz = self.projection(points, calibs, transforms)
         xy = xyz[:, :2, :]
+        
+        # if the point is outside bounding box, return outside.
+        in_bb = (xyz >= -1) & (xyz <= 1)
+        in_bb = in_bb[:, 0, :] & in_bb[:, 1, :] & in_bb[:, 2, :]
+        in_bb = in_bb[:, None, :].detach().float()
+
+        if labels is not None:
+            self.labels = in_bb * labels
 
         sp_feat = self.spatial_enc(xyz, calibs=calibs)
 
@@ -94,7 +99,7 @@ class HGPIFuNet(BasePIFuNet):
                 point_local_feat_list = [self.index(im_feat, xy), sp_feat]            
                 point_local_feat = torch.cat(point_local_feat_list, 1)
 
-            pred = self.mlp(point_local_feat)
+            pred = in_bb * self.mlp(point_local_feat)
             self.intermediate_preds_list.append(pred)
         
         self.preds = self.intermediate_preds_list[-1]

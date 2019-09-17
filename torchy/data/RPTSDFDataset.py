@@ -53,9 +53,9 @@ class RPTSDFDataset(RPDataset):
     
     def select_sampling_method(self, subject, calib):
         mode = self.opt.sampling_mode
-        return self.load_points_tsdf(subject, mode)
+        return self.load_points_tsdf(subject, mode, calib)
 
-    def load_points_tsdf(self, subject, mode, num_samples=0, num_files=20):
+    def load_points_tsdf(self, subject, mode, calib, num_samples=0, num_files=20):
         '''
         load points and tsdf from precomputed numpy array
         '''
@@ -66,13 +66,31 @@ class RPTSDFDataset(RPDataset):
 
         tsdf = np.load(tsdf_file)
 
+        inbb = np.matmul(np.concatenate([tsdf[:,:3], np.ones((tsdf.shape[0],1))], 1), calib.T)[:, :3]
+        inbb = (inbb[:, 0] >= -1) & (inbb[:, 0] <= 1) & (inbb[:, 1] >= -1) & \
+               (inbb[:, 1] <= 1) & (inbb[:, 2] >= -1) & (inbb[:, 2] <= 1)
+        
+        tsdf = tsdf[inbb]
+        np.random.shuffle(tsdf)
+
+        # this balance positive and negative sdf, which seems critical for stable training
+        tsdf_pos = tsdf[tsdf[:,3] >= 0]
+        tsdf_neg = tsdf[tsdf[:,3] < 0]
+
         if num_samples <= 0:
             num_samples = self.num_sample_inout
-        tsdf_indices = np.random.randint(len(tsdf), size=num_samples)
-        tsdf = tsdf[tsdf_indices]
+
+        nin = tsdf_pos.shape[0]
+        tsdf_pos = tsdf_pos[
+                        :num_samples // 2] if nin > num_samples // 2 else tsdf_pos
+        tsdf_neg = tsdf_neg[
+                         :num_samples // 2] if nin > num_samples // 2 else tsdf_neg[
+                             :(num_samples - nin)]    
+
+        tsdf = np.concatenate([tsdf_pos, tsdf_neg], 0) # [3, N]
 
         samples = tsdf[:,:3]
-        labels = tsdf[:,3:]
+        labels = 0.5 * tsdf[:,3:] + 0.5 # rescale to [0, 1]
 
         # C = scalar2color(labels[:,0])
         # save_points_color('tmp.obj', samples, C)
