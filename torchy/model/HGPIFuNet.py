@@ -33,7 +33,7 @@ class HGPIFuNet(BasePIFuNet):
             filter_channels=self.opt.mlp_dim,
             num_views=self.num_views,
             res_layers=self.opt.mlp_res_layers,
-            last_op=nn.Sigmoid())
+            last_op=nn.Sigmoid() if not self.opt.use_tsdf else nn.Tanh())
 
         if self.opt.sp_enc_type == 'vol_enc':
             self.spatial_enc = VolumetricEncoder(opt)

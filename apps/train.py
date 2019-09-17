@@ -67,7 +67,7 @@ def reshape_sample_tensor(sample_tensor, num_views):
     )
     return sample_tensor
 
-def gen_mesh(res, net, cuda, data, save_path, use_octree=False):
+def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=False):
     image_tensor = data['img'].to(device=cuda)
     calib_tensor = data['calib'].to(device=cuda)
 
@@ -85,7 +85,7 @@ def gen_mesh(res, net, cuda, data, save_path, use_octree=False):
         cv2.imwrite(save_img_path, save_img)
 
         verts, faces, _, _ = reconstruction(
-            net, cuda, calib_tensor, res, b_min, b_max, use_octree=use_octree)
+            net, cuda, calib_tensor, res, b_min, b_max, thresh, use_octree=use_octree)
         verts_tensor = torch.from_numpy(verts.T).unsqueeze(0).to(device=cuda).float()
         xyz_tensor = net.projection(verts_tensor, calib_tensor[:1])
         uv = xyz_tensor[:, :2, :]
@@ -132,7 +132,7 @@ def compute_acc(pred, gt, thresh=0.5):
         return true_pos / union, true_pos / vol_pred, true_pos / vol_gt
 
 
-def calc_error(opt, net, cuda, dataset, num_tests, label=None):
+def calc_error(opt, net, cuda, dataset, num_tests, label=None, thresh=0.5):
     if num_tests > len(dataset):
         num_tests = len(dataset)
     with torch.no_grad():
@@ -153,7 +153,7 @@ def calc_error(opt, net, cuda, dataset, num_tests, label=None):
             res = net.get_preds()
             error = net.get_error()
 
-            IOU, prec, recall = compute_acc(res, label_tensor)
+            IOU, prec, recall = compute_acc(res, label_tensor, thresh)
 
             # print(
             #     '{0}/{1} | Error: {2:06f} IOU: {3:06f} prec: {4:06f} recall: {5:06f}'
@@ -183,7 +183,10 @@ def train(opt):
 
     vis = Visualizer(opt)
 
-    if opt.sampling_otf:
+    if opt.use_tsdf:
+        train_dataset = RPTSDFDataset(opt, phase='train')
+        test_dataset = RPTSDFDataset(opt, phase='val')
+    elif opt.sampling_otf:
         train_dataset = RPOtfDataset(opt, phase='train')
         test_dataset = RPOtfDataset(opt, phase='val')
     else:
@@ -202,6 +205,7 @@ def train(opt):
                                   num_workers=opt.num_threads, pin_memory=opt.pin_memory)
     print('test data size: ', len(test_data_loader))
 
+    ls_thresh = 0.5 if not opt.use_tsdf else 0.0 # set level set boundary
     netG = HGPIFuNet(opt, projection_mode).to(device=cuda)
     optimizerG = torch.optim.RMSprop(netG.parameters(), lr=opt.learning_rate, momentum=0, weight_decay=0)
     lr = opt.learning_rate
@@ -320,7 +324,7 @@ def train(opt):
             if not opt.no_numel_eval:
                 print('calc error (train) ...')
                 train_dataset.is_train = False
-                err = calc_error(opt, netG, cuda, train_dataset, 100, 'train')
+                err = calc_error(opt, netG, cuda, train_dataset, 100, 'train', ls_thresh)
                 train_dataset.is_train = True
                 print('eval: ', ''.join(['{}: {:.6f} '.format(k, v) for k,v in err.items()]))
                 test_losses.update(err)
@@ -328,7 +332,7 @@ def train(opt):
                     writer.add_scalar('%s/%s' % (k.split('-')[0],'train'), v, cur_iter)
 
                 print('calc error (test) ...')
-                err = calc_error(opt, netG, cuda, test_dataset, 360, 'test')
+                err = calc_error(opt, netG, cuda, test_dataset, 360, 'test', ls_thresh)
                 if err['IOU-test'] > max_IOU:
                     max_IOU = err['IOU-test']
                 print('eval: ', ''.join(['{}: {:.6f} '.format(k, v) for k,v in err.items()]), 'bestIOU: %.3f' % max_IOU)
@@ -346,7 +350,7 @@ def train(opt):
                     train_data = train_dataset[data_idx]
                     save_path = '%s/%s/train_eval_epoch%d_%s_%d_%d.obj' % (
                         opt.results_path, opt.name, epoch, train_data['name'], train_data['vid'], train_data['pid'])
-                    gen_mesh(opt.resolution, netG, cuda, train_data, save_path)
+                    gen_mesh(opt.resolution, netG, cuda, train_data, save_path, ls_thresh)
 
                 print('generate mesh (test) ...')
                 random.seed(1)
@@ -355,7 +359,7 @@ def train(opt):
                     test_data = test_dataset[data_idx]
                     save_path = '%s/%s/test_eval_epoch%d_%s_%d_%d.obj' % (
                         opt.results_path, opt.name, epoch, test_data['name'], test_data['vid'], test_data['pid'])
-                    gen_mesh(opt.resolution, netG, cuda, test_data, save_path)
+                    gen_mesh(opt.resolution, netG, cuda, test_data, save_path, ls_thresh)
 
 if __name__ == '__main__':
     train(opt)

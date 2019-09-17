@@ -6,7 +6,7 @@ from skimage import measure
 
 
 def reconstruction(net, cuda, calib_tensor,
-                   resolution, b_min, b_max,
+                   resolution, b_min, b_max, thresh=0.5,
                    use_octree=False, num_samples=10000, transform=None):
     '''
     Reconstruct meshes from sdf predicted by the network.
@@ -42,7 +42,7 @@ def reconstruction(net, cuda, calib_tensor,
 
     # Finally we do marching cubes
     try:
-        verts, faces, normals, values = measure.marching_cubes_lewiner(sdf, 0.5)
+        verts, faces, normals, values = measure.marching_cubes_lewiner(sdf, thresh)
         # transform verts into world coordinate system
         verts = np.matmul(mat[:3, :3], verts.T) + mat[:3, 3:4]
         verts = verts.T
