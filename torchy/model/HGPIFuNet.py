@@ -98,7 +98,6 @@ class HGPIFuNet(BasePIFuNet):
             else:
                 point_local_feat_list = [self.index(im_feat, xy), sp_feat]            
                 point_local_feat = torch.cat(point_local_feat_list, 1)
-
             pred = in_bb * self.mlp(point_local_feat)
             self.intermediate_preds_list.append(pred)
         
@@ -121,4 +120,10 @@ class HGPIFuNet(BasePIFuNet):
             error += self.error_term(preds, self.labels)
         return error
 
-    
+    def forward(self, images, points, calibs, labels):
+        self.filter(images)
+        self.query(points, calibs, labels=labels)
+        res = self.get_preds()
+        err = self.get_error()
+
+        return err, res

@@ -10,6 +10,7 @@ import numpy as np
 import cv2
 import random
 import torch
+import torch.nn as nn
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
@@ -229,7 +230,7 @@ def train(opt):
             print('Error: could not find checkpoint [%s]' % model_path)
             opt.continue_train = False
             opt.resume_epoch = 0
-
+    
     multi_gpu = False
     if torch.cuda.device_count() > 1:
         print("Let's use", torch.cuda.device_count(), "GPUs!")
@@ -274,11 +275,12 @@ def train(opt):
 
             iter_start_time = time.time()
 
-            netG.filter(image_tensor)
-            netG.query(points=sample_tensor, calibs=calib_tensor, labels=label_tensor)
+            errG, res = netG(image_tensor, sample_tensor, calib_tensor, label_tensor)
 
-            res = netG.get_preds()
-            errG = netG.get_error()
+            # NOTE: in multi-GPU case, since forward returns errG with number of GPUs, we need to marge.
+            if multi_gpu:
+                errG = errG.mean()
+
             errG /= opt.num_stack
 
             optimizerG.zero_grad()
@@ -335,7 +337,7 @@ def train(opt):
             if not opt.no_numel_eval:
                 print('calc error (train) ...')
                 train_dataset.is_train = False
-                err = calc_error(opt, netG, cuda, train_dataset, 100, 'train', ls_thresh)
+                err = calc_error(opt, netG if not multi_gpu else netG.module, cuda, train_dataset, 100, 'train', ls_thresh)
                 train_dataset.is_train = True
                 print('eval: ', ''.join(['{}: {:.6f} '.format(k, v) for k,v in err.items()]))
                 test_losses.update(err)
@@ -343,7 +345,7 @@ def train(opt):
                     writer.add_scalar('%s/%s' % (k.split('-')[0],'train'), v, cur_iter)
 
                 print('calc error (test) ...')
-                err = calc_error(opt, netG, cuda, test_dataset, 360, 'test', ls_thresh)
+                err = calc_error(opt, netG if not multi_gpu else netG.module, cuda, test_dataset, 360, 'test', ls_thresh)
                 if err['IOU-test'] > max_IOU:
                     max_IOU = err['IOU-test']
                 print('eval: ', ''.join(['{}: {:.6f} '.format(k, v) for k,v in err.items()]), 'bestIOU: %.3f' % max_IOU)
@@ -361,7 +363,7 @@ def train(opt):
                     train_data = train_dataset[data_idx]
                     save_path = '%s/%s/train_eval_epoch%d_%s_%d_%d.obj' % (
                         opt.results_path, opt.name, epoch, train_data['name'], train_data['vid'], train_data['pid'])
-                    gen_mesh(opt.resolution, netG, cuda, train_data, save_path, ls_thresh)
+                    gen_mesh(opt.resolution, netG if not multi_gpu else netG.module, cuda, train_data, save_path, ls_thresh)
 
                 print('generate mesh (test) ...')
                 random.seed(1)
@@ -370,7 +372,7 @@ def train(opt):
                     test_data = test_dataset[data_idx]
                     save_path = '%s/%s/test_eval_epoch%d_%s_%d_%d.obj' % (
                         opt.results_path, opt.name, epoch, test_data['name'], test_data['vid'], test_data['pid'])
-                    gen_mesh(opt.resolution, netG, cuda, test_data, save_path, ls_thresh)
+                    gen_mesh(opt.resolution, netG if not multi_gpu else netG.module, cuda, test_data, save_path, ls_thresh)
 
 if __name__ == '__main__':
     train(opt)
