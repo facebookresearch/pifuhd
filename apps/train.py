@@ -207,7 +207,6 @@ def train(opt):
 
     ls_thresh = 0.5 # level set boundary
     netG = HGPIFuNet(opt, projection_mode).to(device=cuda)
-    optimizerG = torch.optim.RMSprop(netG.parameters(), lr=opt.learning_rate, momentum=0, weight_decay=0)
     lr = opt.learning_rate
     
     def set_train():
@@ -230,6 +229,14 @@ def train(opt):
             print('Error: could not find checkpoint [%s]' % model_path)
             opt.continue_train = False
             opt.resume_epoch = 0
+
+    multi_gpu = False
+    if torch.cuda.device_count() > 1:
+        print("Let's use", torch.cuda.device_count(), "GPUs!")
+        netG = nn.DataParallel(netG)
+        multi_gpu = True
+
+    optimizerG = torch.optim.RMSprop(netG.parameters(), lr=opt.learning_rate, momentum=0, weight_decay=0)
 
     os.makedirs(opt.checkpoints_path, exist_ok=True)
     os.makedirs(opt.results_path, exist_ok=True)
@@ -290,8 +297,12 @@ def train(opt):
                     int(eta - 60 * (eta // 60))))
             
             if train_idx % opt.freq_save == 100 and train_idx != 0:
-                torch.save(netG.state_dict(), '%s/%s_train_epoch_%d' % (opt.checkpoints_path, opt.name, epoch))
-                torch.save(netG.state_dict(), '%s/%s_train_latest' % (opt.checkpoints_path, opt.name))
+                if multi_gpu:
+                    torch.save(netG.module.state_dict(), '%s/%s_train_epoch_%d' % (opt.checkpoints_path, opt.name, epoch))
+                    torch.save(netG.module.state_dict(), '%s/%s_train_latest' % (opt.checkpoints_path, opt.name))
+                else:
+                    torch.save(netG.state_dict(), '%s/%s_train_epoch_%d' % (opt.checkpoints_path, opt.name, epoch))
+                    torch.save(netG.state_dict(), '%s/%s_train_latest' % (opt.checkpoints_path, opt.name))
 
             if train_idx % opt.freq_save_ply == 0 and train_idx != 0:
                 save_path = '%s/%s/test_epoch%d_idx%d.ply' % (opt.results_path, opt.name, epoch, train_idx)
