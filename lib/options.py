@@ -59,8 +59,9 @@ class BaseOptions():
         # Sampling related
         g_sample = parser.add_argument_group('Sampling')
         g_sample.add_argument('--num_sample', type=int, default=10000, help='# of sampling points')
-        g_sample.add_argument('--num_sample_inout', type=int, default=None, help='# of sampling points')
-        g_sample.add_argument('--num_sample_color', type=int, default=None, help='# of sampling points')
+        g_sample.add_argument('--num_sample_inout', type=int, default=0, help='# of sampling points')
+        g_sample.add_argument('--num_sample_color', type=int, default=0, help='# of sampling points')
+        g_sample.add_argument('--num_sample_normal', type=int, default=0, help='# of sampling points')
         g_sample.add_argument('--num_pts_dic', type=int, default=5, help='# of pts dic you load')
 
         g_sample.add_argument('--max_pitch', type=int, default=45, help='max pitch angle')
@@ -121,9 +122,11 @@ class BaseOptions():
         parser.add_argument('--schedule', type=int, nargs='+', default=[10, 15],
                             help='Decrease learning rate at these epochs.')
         parser.add_argument('--gamma', type=float, default=0.1, help='LR is multiplied by gamma on schedule.')
+        parser.add_argument('--lambda_nml', type=float, default=1, help='weight of normal loss')
         parser.add_argument('--lambda_inout', type=float, default=1, help='weight of input loss')
         parser.add_argument('--lambda_color', type=float, default=1, help='weight of color loss')
         parser.add_argument('--lambda_gan', type=float, default=1, help='weight of color gan loss')
+        parser.add_argument('--nml_loss_type', type=str, default='mse', help='mse | l1')
         parser.add_argument('--color_loss_type', type=str, default='mse', help='mse | l1')
         parser.add_argument('--no_finetune', action='store_true', help='fine tuning netG in training C')
         parser.add_argument('--random_bg', action='store_true', help='using random background')

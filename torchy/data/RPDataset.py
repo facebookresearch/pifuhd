@@ -46,6 +46,7 @@ class RPDataset(Dataset):
 
         self.num_sample_inout = self.opt.num_sample_inout
         self.num_sample_color = self.opt.num_sample_color
+        self.num_sample_normal = self.opt.num_sample_normal
 
         self.max_yaw_angle = 360
         self.max_pitch_angle = self.opt.max_pitch # that's for positive and negative
@@ -268,6 +269,40 @@ class RPDataset(Dataset):
             'labels': labels,
         }
 
+    def get_normal_sampling(self, subject):
+        uv_pos_path = os.path.join(self.UV_POS, subject, '%02d.exr' % (0))
+        uv_normal_path = os.path.join(self.UV_NORMAL, subject, '%02d.png' % (0))
+
+        # surface normal is used to perturb the points perpendicularly 
+        uv_normal = cv2.imread(uv_normal_path)
+        mask = (uv_normal == 0)
+        mask = np.logical_not(uv_normal[:,:,0] & uv_normal[:,:,1] & uv_normal[:,:,1])
+        uv_normal = cv2.cvtColor(uv_normal, cv2.COLOR_BGR2RGB) / 255.0
+        uv_normal = 2.0 * uv_normal - 1.0
+        # position map
+        uv_pos = cv2.imread(uv_pos_path, 2 | 4)[:, :, ::-1]
+
+        # flatten these images to select only surface pixels
+        mask = mask.reshape((-1))
+        uv_normal = uv_normal.reshape((-1, 3))
+        uv_pos = uv_pos.reshape((-1, 3))
+
+        surface_points = uv_pos[mask].T
+        surface_normals = uv_normal[mask].T
+
+        if self.num_sample_normal:
+            sample_list = random.sample(range(0, surface_points.shape[1] - 1), self.num_sample_normal)
+            surface_points = surface_points[:,sample_list]
+            surface_normals = surface_normals[:,sample_list]
+        
+        normals = torch.Tensor(surface_normals).float()
+        samples = torch.Tensor(surface_points).float()
+
+        return {
+            'samples_nml': samples,
+            'labels_nml': normals
+        }
+
     def get_color_sampling(self, subject, view_id, pitch=0):
         uv_render_path = os.path.join(self.UV_RENDER, subject, '%d_%d_%02d.jpg' % (vid, pitch, 0))
         uv_mask_path = os.path.join(self.UV_MASK, subject, '%d_%d_%02d.png' % (vid, pitch, 0)) 
@@ -347,10 +382,12 @@ class RPDataset(Dataset):
             }
             render_data = self.get_render(subject, num_views=self.num_views, view_id=vid,
                                             pitch=pid, random_sample=self.opt.random_multiview)
-            sample_data = self.select_sampling_method(subject, render_data['calib'][0].numpy())
-
+            sample_data = self.select_sampling_method(subject, render_data['calib'][0].numpy())        
             res.update(render_data)
             res.update(sample_data)
+            if self.num_sample_normal:
+                normal_data = self.get_normal_sampling(subject)
+                res.update(normal_data)
             if self.num_sample_color:
                 color_data = self.get_color_sampling(subject, view_id=vid)
                 res.upate(color_data)

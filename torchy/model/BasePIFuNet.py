@@ -7,7 +7,7 @@ from ..geometry import index, orthogonal, perspective
 class BasePIFuNet(nn.Module):
     def __init__(self,
                  projection_mode='orthogonal',
-                 error_term=nn.MSELoss(),
+                 criteria={'occ': nn.MSELoss()},
                  ):
         '''
         args:
@@ -17,13 +17,16 @@ class BasePIFuNet(nn.Module):
         super(BasePIFuNet, self).__init__()
         self.name = 'base'
 
-        self.error_term = error_term
+        self.criteria = criteria
 
         self.index = index
         self.projection = orthogonal if projection_mode == 'orthogonal' else perspective
 
         self.preds = None
         self.labels = None
+        self.nmls = None
+        self.labels_nml = None
+        self.preds_surface = None # with normal loss only
 
     def forward(self, points, images, calibs, transforms=None):
         '''
@@ -60,6 +63,19 @@ class BasePIFuNet(nn.Module):
             labels: [B, C, N] ground truth labels (for supervision only)
         return:
             [B, C, N] prediction
+        '''
+        None
+
+    def calc_normal(self, points, calibs, transforms=None, delta=0.1):
+        '''
+        return surface normal in 'model' space.
+        it computes normal only in the last stack.
+        note that the current implementation use forward difference.
+        args:
+            points: [B, 3, N] 3d points in world space
+            calibs: [B, 3, 4] calibration matrices for each image
+            transforms: [B, 2, 3] image space coordinate transforms
+            delta: perturbation for finite difference
         '''
         None
 

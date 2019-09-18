@@ -107,6 +107,17 @@ def adjust_learning_rate(optimizer, epoch, lr, schedule, gamma):
 def linear_anneal_sigma(opt, cur_epoch, n_epoch):
     opt.sigma = (opt.sigma_min - opt.sigma_max) * cur_epoch / float(n_epoch - 1) + opt.sigma_max
    
+def total_error(errors, multi_gpu=False):
+    if multi_gpu:
+        for key in errors.keys():
+            errors[key] = errors[key].mean()
+
+    error = 0
+    error += errors['Err(occ)']
+    if 'Err(nml)' in errors:
+        error += opt.lambda_nml * errors['Err(nml)']
+    return error
+
 def compute_acc(pred, gt, thresh=0.5):
     '''
     return:
@@ -137,7 +148,7 @@ def calc_error(opt, net, cuda, dataset, num_tests, label=None, thresh=0.5):
     if num_tests > len(dataset):
         num_tests = len(dataset)
     with torch.no_grad():
-        error_arr, IOU_arr, prec_arr, recall_arr = [], [], [], []
+        error_arr, IOU_arr, prec_arr, recall_arr = {}, [], [], []
         for idx in tqdm(range(num_tests)):
             data = dataset[idx * len(dataset) // num_tests]
             # retrieve the data
@@ -154,31 +165,47 @@ def calc_error(opt, net, cuda, dataset, num_tests, label=None, thresh=0.5):
             res = net.get_preds()
             error = net.get_error()
 
+            err = total_error(error, False)
+
             IOU, prec, recall = compute_acc(res, label_tensor, thresh)
 
             # print(
             #     '{0}/{1} | Error: {2:06f} IOU: {3:06f} prec: {4:06f} recall: {5:06f}'
             #         .format(idx, num_tests, error.item(), IOU.item(), prec.item(), recall.item()))
-            error_arr.append(error.item())
+            if idx == 0:
+                error_arr['Err(total)'] = [err.item()]
+                for k, v in error.items():
+                    error_arr[k] = [v.item()]
+            else:
+                error_arr['Err(total)'].append(err.item())
+                for k, v in error.items():
+                    error_arr[k].append(v.item())
             IOU_arr.append(IOU.item())
             prec_arr.append(prec.item())
             recall_arr.append(recall.item())
     
     if label is not None:
-        return {
-            'MSE-%s' % label: np.average(error_arr),
+        err = {}
+        for k, v in error_arr.items():
+            err['%s-%s' % (k, label)] = np.average(v)
+        acc = {
             'IOU-%s' % label: np.average(IOU_arr),
             'prec-%s' % label: np.average(prec_arr),
             'recall-%s' % label: np.average(recall_arr),
-        }
+        }       
+        err.update(acc)     
+        return err
     else:
-        return {
-            'MSE': np.average(error_arr),
+        err = {}
+        for k, v in error_arr.items():
+            err['%s' % k] = np.average(v)
+        acc = {
             'IOU': np.average(IOU_arr),
             'prec': np.average(prec_arr),
             'recall': np.average(recall_arr),
-        }
-
+        }       
+        err.update(acc)     
+        return err
 def train(opt):
     cuda = torch.device('cuda:%d' % opt.gpu_id)
 
@@ -207,7 +234,13 @@ def train(opt):
     print('test data size: ', len(test_data_loader))
 
     ls_thresh = 0.5 # level set boundary
-    netG = HGPIFuNet(opt, projection_mode).to(device=cuda)
+    criteria = {'occ': nn.MSELoss()}
+    if opt.nml_loss_type == 'mse':
+        criteria['nml'] = nn.MSELoss()
+    elif opt.nml_loss_type == 'l1':
+        criteria['nml'] = nn.L1Loss()
+
+    netG = HGPIFuNet(opt, projection_mode, criteria).to(device=cuda)
     lr = opt.learning_rate
     
     def set_train():
@@ -272,30 +305,32 @@ def train(opt):
                 sample_tensor = reshape_sample_tensor(sample_tensor, opt.num_views)
 
             label_tensor = train_data['labels'].to(device=cuda)
+            if opt.num_sample_normal:
+                sample_nml_tensor = train_data['samples_nml'].to(device=cuda)
+                label_nml_tensor = train_data['labels_nml'].to(device=cuda)
+            else:
+                sample_nml_tensor = None
+                label_nml_tensor = None
 
             iter_start_time = time.time()
 
-            errG, res = netG(image_tensor, sample_tensor, calib_tensor, label_tensor)
+            errG, res = netG(image_tensor, sample_tensor, calib_tensor, label_tensor,\
+                             sample_nml_tensor, label_nml_tensor)
 
             # NOTE: in multi-GPU case, since forward returns errG with number of GPUs, we need to marge.
-            if multi_gpu:
-                errG = errG.mean()
-
-            errG /= opt.num_stack
+            err = total_error(errG, multi_gpu)
 
             optimizerG.zero_grad()
-            errG.backward()
+            err.backward()
             optimizerG.step()
 
             iter_net_time = time.time()
             eta = ((iter_net_time - epoch_start_time) / (train_idx + 1)) * len(train_data_loader) - (
                     iter_net_time - epoch_start_time)
-            
             print(
-                'Name: {0} | Epoch: {1}/{2} | {3}/{4} | Err: {5:05f} | LR: {6:.1e} | SIG: {7:.1e} | dataT: {8:04f} | netT: {9:04f} | ETA: {10:02d}:{11:02d}'.format(
-                    opt.name, epoch, num_epoch, train_idx, len(train_data_loader), errG.item(), lr, opt.sigma,
-                                                                        iter_start_time - iter_data_time,
-                                                                        iter_net_time - iter_start_time, int(eta // 60),
+                'Name: %s | Epoch: %d/%d | %d/%d | Err: %.5f | %sLR: %.1e | SIG: %.1e | dataT: %.4f | netT: %.4f | ETA: %02d:%02d' % (
+                    opt.name, epoch, num_epoch, train_idx, len(train_data_loader), err.item(), ''.join(['{}: {:.4f} | '.format(k, v.item()) for k,v in errG.items()]),
+                    lr, opt.sigma, iter_start_time - iter_data_time, iter_net_time - iter_start_time, int(eta // 60),
                     int(eta - 60 * (eta // 60))))
             
             if train_idx % opt.freq_save == 100 and train_idx != 0:
@@ -313,12 +348,14 @@ def train(opt):
                 save_samples_truncted_prob(save_path, points.detach().numpy(), r.detach().numpy())
   
             if train_idx % opt.freq_plot == 0:
-                losses = {}
-                losses['train_mse'] = errG.item() / opt.num_stack
                 counter_ratio = train_idx / len(train_data_loader)
-
+                losses = {}
+                losses['total_loss'] = err.item()
+                for k, v in errG.items():
+                    losses[k] = v.item()
                 vis.plot_current_losses(epoch, counter_ratio, losses)
-                writer.add_scalar('total_loss/train', losses['train_mse'], cur_iter)
+                for k, v in losses.items():
+                    writer.add_scalar('%s/train' % k, v, cur_iter)
 
             if train_idx % opt.freq_save_image == 0:
                 visuals = {}

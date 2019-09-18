@@ -72,25 +72,26 @@ def gen_mesh(res, net, cuda, data, save_path, use_octree=False):
 
     b_min = data['b_min']
     b_max = data['b_max']
-    try:
-        save_img_path = save_path[:-4] + '.png'
-        save_img_list = []
-        for v in range(image_tensor.shape[0]):
-            save_img = (np.transpose(image_tensor[v].detach().cpu().numpy(), (1, 2, 0)) * 0.5 + 0.5)[:, :, ::-1] * 255.0
-            save_img_list.append(save_img)
-        save_img = np.concatenate(save_img_list, axis=1)
-        cv2.imwrite(save_img_path, save_img)
+    # try:
+    save_img_path = save_path[:-4] + '.png'
+    save_img_list = []
+    for v in range(image_tensor.shape[0]):
+        save_img = (np.transpose(image_tensor[v].detach().cpu().numpy(), (1, 2, 0)) * 0.5 + 0.5)[:, :, ::-1] * 255.0
+        save_img_list.append(save_img)
+    save_img = np.concatenate(save_img_list, axis=1)
+    cv2.imwrite(save_img_path, save_img)
 
-        verts, faces, _, _ = reconstruction(
-            net, cuda, calib_tensor, res, b_min, b_max, use_octree=use_octree)
-        verts_tensor = torch.from_numpy(verts.T).unsqueeze(0).to(device=cuda).float()
-        xyz_tensor = net.projection(verts_tensor, calib_tensor[:1])
-        uv = xyz_tensor[:, :2, :]
-        color = index(image_tensor[:1], uv).detach().cpu().numpy()[0].T
-        color = color * 0.5 + 0.5
-        save_obj_mesh_with_color(save_path, verts, faces, color)
-    except:
-        print('Can not create marching cubes at this time.')
+    verts, faces, _, _ = reconstruction(
+        net, cuda, calib_tensor, res, b_min, b_max, use_octree=use_octree)
+    verts_tensor = torch.from_numpy(verts.T).unsqueeze(0).to(device=cuda).float()
+    color = net.get_normal(verts_tensor, calib_tensor[:1]).detach().cpu().numpy()[0].T
+    # xyz_tensor = net.projection(verts_tensor, calib_tensor[:1])
+    # uv = xyz_tensor[:, :2, :]
+    # color = index(image_tensor[:1], uv).detach().cpu().numpy()[0].T
+    color = color * 0.5 + 0.5
+    save_obj_mesh_with_color(save_path, verts, faces, color)
+    # except:
+    #     print('Can not create marching cubes at this time.')
 
 def compute_acc(pred, gt, thresh=0.5):
     '''
@@ -185,7 +186,10 @@ def eval(opt):
         print('loading for netG...', opt.load_netG_checkpoint_path)
         netG.load_state_dict(torch.load(opt.load_netG_checkpoint_path, map_location=cuda))
     else:
-        model_path = '%s/%s_train_epoch_%d' % (opt.checkpoints_path, opt.name, opt.resume_epoch)
+        if opt.resume_epoch > 0:
+            model_path = '%s/%s_train_epoch_%d' % (opt.checkpoints_path, opt.name, opt.resume_epoch)
+        else:
+            model_path = '%s/%s_train_latest' % (opt.checkpoints_path, opt.name)
         if os.path.exists(model_path):
             print('Resuming from ', model_path)
             netG.load_state_dict(torch.load(model_path, map_location=cuda))
