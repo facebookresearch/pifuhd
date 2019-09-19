@@ -11,6 +11,7 @@ import torch
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 
+
 class RPDataset(Dataset):
     @staticmethod
     def modify_commandline_options(parser, is_train):
@@ -272,13 +273,15 @@ class RPDataset(Dataset):
     def get_normal_sampling(self, subject):
         uv_pos_path = os.path.join(self.UV_POS, subject, '%02d.exr' % (0))
         uv_normal_path = os.path.join(self.UV_NORMAL, subject, '%02d.png' % (0))
+        uv_mask_path = os.path.join(self.UV_MASK, subject, '%02d.png' % (0)) 
 
-        # surface normal is used to perturb the points perpendicularly 
+        mask = cv2.imread(uv_mask_path)
+        mask = mask[:, :, 0] != 0
+
         uv_normal = cv2.imread(uv_normal_path)
-        mask = (uv_normal == 0)
-        mask = np.logical_not(uv_normal[:,:,0] & uv_normal[:,:,1] & uv_normal[:,:,1])
         uv_normal = cv2.cvtColor(uv_normal, cv2.COLOR_BGR2RGB) / 255.0
         uv_normal = 2.0 * uv_normal - 1.0
+
         # position map
         uv_pos = cv2.imread(uv_pos_path, 2 | 4)[:, :, ::-1]
 
