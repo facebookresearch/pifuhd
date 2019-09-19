@@ -93,9 +93,6 @@ class HGPIFuNet(BasePIFuNet):
         self.intermediate_preds_list = []
 
         for i, im_feat in enumerate(self.im_feat_list):
-            # for evaluation the intermediate results are waste of computation
-            if labels is None and i != len(self.im_feat_list)-1:
-                continue
 
             if self.opt.sp_enc_type == 'vol_enc' and self.opt.sp_no_pifu:
                 point_local_feat = sp_feat
