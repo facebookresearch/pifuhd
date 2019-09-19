@@ -4,6 +4,12 @@ import torch.nn as nn
 import torch.nn.functional as F 
 import functools
 
+# if F.normalize suffers from instability, try this
+def normalize(x, dim, eps=1e-10):
+    xsq = torch.sum(x.pow(2),dim,keepdim=True).sqrt() + eps
+    x = x / xsq.expand_as(x).contiguous().detach() # NOTE: without detach, grad tends to blow up
+    return x
+
 def conv3x3(in_planes, out_planes, strd=1, padding=1, bias=False):
     return nn.Conv2d(in_planes, out_planes, kernel_size=3,
                      stride=strd, padding=padding, bias=bias)
