@@ -149,7 +149,7 @@ class HGPIFuNet(BasePIFuNet):
         dfdz = pred[:,:,:,3] - pred[:,:,:,0]
 
         nml = -torch.cat([dfdx,dfdy,dfdz], 1)
-        nml = F.normalize(nml, dim=1)
+        nml = F.normalize(nml, dim=1, eps=1e-8)
 
         self.nmls = nml
         self.preds_surface = pred[:,:,:,0]

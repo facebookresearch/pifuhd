@@ -163,13 +163,17 @@ def calc_error(opt, net, cuda, dataset, num_tests, label=None, thresh=0.5):
             if opt.num_views > 1:
                 sample_tensor = reshape_sample_tensor(sample_tensor, opt.num_views)
             label_tensor = data['labels'].to(device=cuda).unsqueeze(0)
+            if opt.num_sample_normal:
+                sample_nml_tensor = data['samples_nml'].to(device=cuda).unsqueeze(0)
+                label_nml_tensor = data['labels_nml'].to(device=cuda).unsqueeze(0)
+            else:
+                sample_nml_tensor = None
+                label_nml_tensor = None
 
-            net.filter(image_tensor)
-            net.query(points=sample_tensor, calibs=calib_tensor, labels=label_tensor)
+            error, res = net(image_tensor, sample_tensor, calib_tensor, label_tensor,\
+                             sample_nml_tensor, label_nml_tensor)
 
-            res = net.get_preds()
-            error = net.get_error()
-
+            # NOTE: in multi-GPU case, since forward returns errG with number of GPUs, we need to marge.
             err = total_error(error, False)
 
             IOU, prec, recall = compute_acc(res, label_tensor, thresh)
@@ -211,6 +215,7 @@ def calc_error(opt, net, cuda, dataset, num_tests, label=None, thresh=0.5):
         }       
         err.update(acc)     
         return err
+        
 def train(opt):
     cuda = torch.device('cuda:%d' % opt.gpu_id)
 
