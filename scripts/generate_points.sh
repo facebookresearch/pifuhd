@@ -2,7 +2,7 @@ set -ex
 
 # Dataset
 DATASET='renderppl'
-DATAROOT='/home/shunsukesaito/data/hf_human'
+DATAROOT='/home/shunsukesaito/data/hf_human_new'
 
 # Training
 NAME='devfair'

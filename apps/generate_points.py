@@ -29,9 +29,21 @@ def precompute_points(opt):
     dataset = RPOtfDataset(opt, phase='train')
 
     subjects = dataset.get_subjects()
-
-    for sub in subjects:
-        dataset.precompute_points(sub, num_files=100)
+    
+    flag = False
+    for i in range(1, 10, 2):
+        dataset.opt.sigma = float(i)
+        dataset.opt.sampleing_mode = 'uniform_simga%d' % i
+        for sub in subjects:
+            if i == 1 and sub == 'rp_andrew_posed_002':
+                flag = True
+            if not flag:
+                continue
+            print(sub, 'sigma', i)
+            try:
+                dataset.precompute_points(sub, num_files=10)
+            except:
+                print('failed', sub)
 
 def precompute_tsdf(opt):
     cuda = torch.device('cuda:%d' % opt.gpu_id)
@@ -45,6 +57,6 @@ def precompute_tsdf(opt):
 
 
 if __name__ == '__main__':
-    # precompute_points(opt)
-    precompute_tsdf(opt)
+    precompute_points(opt)
+    # precompute_tsdf(opt)
   

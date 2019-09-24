@@ -107,8 +107,11 @@ def adjust_learning_rate(optimizer, epoch, lr, schedule, gamma):
     return lr
 
 def linear_anneal_sigma(opt, cur_epoch, n_epoch):
-    opt.sigma = (opt.sigma_min - opt.sigma_max) * cur_epoch / float(n_epoch - 1) + opt.sigma_max
-   
+    if n_epoch > 1:
+        opt.sigma = (opt.sigma_min - opt.sigma_max) * cur_epoch / float(n_epoch - 1) + opt.sigma_max
+    else:
+        opt.sigma = opt.sigma_max
+
 def total_error(errors, multi_gpu=False):
     if multi_gpu:
         for key in errors.keys():
@@ -284,9 +287,10 @@ def train(opt):
 
     # training
     start_epoch = 0 if not opt.continue_train else opt.resume_epoch
-    num_epoch = opt.num_iter // len(train_data_loader)
+    num_epoch = 1 + opt.num_iter // len(train_data_loader)
     cur_iter = start_epoch * len(train_data_loader)
     max_IOU = 0.0
+    print(num_epoch)
     for epoch in range(start_epoch, num_epoch):
         epoch_start_time = time.time()
 

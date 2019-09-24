@@ -2,7 +2,7 @@ set -ex
 
 # Dataset
 DATASET='renderppl'
-DATAROOT='/home/shunsukesaito/data/hf_human'
+DATAROOT='/home/shunsukesaito/data/hf_human_new'
 
 # Training
 GPU_ID=0
@@ -76,7 +76,7 @@ CUDA_VISIBLE_DEVICES=${GPU_ID} python ./apps/train.py \
     --sampling_otf \
     --sigma_max ${SIGMA_MAX} \
     --sigma_min ${SIGMA_MIN} \
-    --num_pts_dic 5 \
+    --num_pts_dic 1 \
     --norm 'group' \
     --freq_save_ply 5000 \
     --aug_bri ${AUG_BRI} \

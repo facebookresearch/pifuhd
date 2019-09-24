@@ -1,5 +1,7 @@
 import os
+import sys
 import random
+import copy
 
 import numpy as np 
 from numpy.linalg import inv
@@ -18,6 +20,13 @@ import torchvision.transforms as transforms
 from tqdm import tqdm
 from .RPDataset import RPDataset
 
+import gc
+
+# this is necessary to remove warning from trimesh
+import logging
+trimesh.util.attach_to_log(level=logging.CRITICAL, capture_warnings=False)
+
+g_mesh_dics = None
 
 def scalar2color(x, min=-1.0, max=1.0):
 
@@ -44,23 +53,33 @@ def save_points_color(filename, V, C=None, F=None):
                 file.write('f %d %d %d\n' % (F[i,0]+1, F[i,1]+1, F[i,2]+1))
         file.close()    
 
-def load_trimesh(root, n_verts='30k', interval=0):
+def load_trimesh(root, n_verts='100k', interval=0):
     folders = os.listdir(os.path.join(root, 'GEO', 'OBJ'))
     
     meshes = {}
     cnt = 0
     mesh_dics = []
+    failed_list = []
     for i, f in enumerate(folders):
-        sub_name = f 
+        sub_name = f[:-8] 
+        print(sub_name)
         obj_path = os.path.join(root, 'GEO', 'OBJ', f, '%s_%s.obj' % (sub_name, n_verts))
         if os.path.exists(obj_path):
-            meshes[sub_name] = trimesh.load(obj_path)
+            try:
+                mesh = trimesh.load(obj_path)
+                meshes[sub_name] = trimesh.Trimesh(mesh.vertices, mesh.faces)
+            except:
+                failed_list.append(sub_name)
+                print('mesh load failed %s' % sub_name)
         if interval != 0 and i % interval == 0 and i != 0:
             mesh_dics.append(meshes)
             meshes = {}
     
     if len(meshes) != 0:
         mesh_dics.append(meshes)
+    
+    print('failed subject')
+    print(failed_list)
 
     return mesh_dics
 
@@ -71,21 +90,26 @@ class RPOtfDataset(RPDataset):
 
     def __init__(self, opt, phase='train'):
         RPDataset.__init__(self, opt, phase=phase)
-        self.mesh_dic = {}
         self.DICT = os.path.join(os.path.join(self.root, 'GEO', 'npy_files'))
-        if not os.path.isdir(self.DICT):
-            mesh_dic = load_trimesh(self.root)
-            for dic in mesh_dic:
-                self.mesh_dic.update(dic)
-        else:
-            print('loading mesh_dic...')
-            for i in tqdm(range(self.opt.num_pts_dic)):
-                self.mesh_dic = {**self.mesh_dic, **(np.load(os.path.join(self.DICT, 'trimesh_dic%d.npy' % i)).item())}
+        global g_mesh_dics
+        if g_mesh_dics is None:
+            g_mesh_dics = {}
+            if not os.path.isdir(self.DICT):
+                os.makedirs(self.DICT,exist_ok=True)
+                mesh_dic = load_trimesh(self.root)
+                for i, dic in enumerate(mesh_dic):
+                    np.save(os.path.join(self.DICT, 'trimesh_dic%d.npy' % i), dic)
+                    g_mesh_dics.update(dic)
+            else:
+                print('loading mesh_dic...')
+                for i in tqdm(range(self.opt.num_pts_dic)):
+                    g_mesh_dics = {**g_mesh_dics, **(np.load(os.path.join(self.DICT, 'trimesh_dic%d.npy' % i),allow_pickle=True).item())}
+                print(len(g_mesh_dics))
     
     def precompute_points(self, subject, num_files=1):
         SAMPLE_DIR = os.path.join(self.SAMPLE, self.opt.sampling_mode, subject)
 
-        mesh = self.mesh_dic[subject]
+        mesh = g_mesh_dics[subject]
 
         for i in tqdm(range(num_files)):
             inside_file = os.path.join(SAMPLE_DIR, '%05d.in.xyz' % i)
@@ -126,7 +150,7 @@ class RPOtfDataset(RPDataset):
     def precompute_tsdf(self, subject, num_files=100, sigma=1.0):
         TSDF_DIR = os.path.join(self.TSDF, self.opt.sampling_mode, subject)
 
-        mesh = self.mesh_dic[subject]
+        mesh = g_mesh_dics[subject]
 
         for i in tqdm(range(num_files)):
             tsdf_file = os.path.join(TSDF_DIR, '%05d.xyzd' % i)
@@ -156,7 +180,7 @@ class RPOtfDataset(RPDataset):
         if not self.is_train:
             random.seed(1991)
             np.random.seed(1991)
-        mesh = self.mesh_dic[subject]
+        mesh = copy.deepcopy(g_mesh_dics[subject])
         if 'sigma' in self.opt.sampling_mode:
             surface_points, fid = trimesh.sample.sample_surface(mesh, 4 * self.num_sample_inout)
             sample_points = surface_points + np.random.normal(scale=self.opt.sigma, size=surface_points.shape)
@@ -183,6 +207,7 @@ class RPOtfDataset(RPDataset):
         inbb = (inbb[:, 0] >= -1) & (inbb[:, 0] <= 1) & (inbb[:, 1] >= -1) & \
                (inbb[:, 1] <= 1) & (inbb[:, 2] >= -1) & (inbb[:, 2] <= 1)
 
+
         sample_points = sample_points[inbb]
         inside = mesh.contains(sample_points)
         inside_points = sample_points[inside]
@@ -199,6 +224,9 @@ class RPOtfDataset(RPDataset):
         samples = torch.Tensor(samples).float()
         labels = np.concatenate([np.ones((1, inside_points.shape[0])), np.zeros((1, outside_points.shape[0]))], 1)
         labels = torch.Tensor(labels).float()
+        
+        del mesh
+        gc.collect()
         return {
             'samples': samples,
             'labels': labels

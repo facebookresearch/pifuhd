@@ -62,7 +62,7 @@ class BaseOptions():
         g_sample.add_argument('--num_sample_inout', type=int, default=0, help='# of sampling points')
         g_sample.add_argument('--num_sample_color', type=int, default=0, help='# of sampling points')
         g_sample.add_argument('--num_sample_normal', type=int, default=0, help='# of sampling points')
-        g_sample.add_argument('--num_pts_dic', type=int, default=5, help='# of pts dic you load')
+        g_sample.add_argument('--num_pts_dic', type=int, default=1, help='# of pts dic you load')
 
         g_sample.add_argument('--max_pitch', type=int, default=45, help='max pitch angle')
         g_sample.add_argument('--mean_pitch', type=int, default=0, help='pitch center')

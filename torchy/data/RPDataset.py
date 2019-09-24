@@ -1,4 +1,5 @@
 import os
+import sys
 import random
 
 import numpy as np 
@@ -41,6 +42,15 @@ class RPDataset(Dataset):
         # self.B_MIN = np.array([-120, -20, -64])
         # self.B_MAX = np.array([120, 220, 64])
 
+        file = open(os.path.join(self.root,'info.txt'),'r')
+        lines = [f.strip() for f in file.readlines()]
+        for l in lines:
+            tmp = l.split(',')
+            if tmp[0] == 'pitch' and phase in tmp[1]:
+                self.pitch_list = [int(i) for i in tmp[2].strip('[]').split(' ')]
+            if tmp[0] == 'yaw' and phase in tmp[1]:
+                self.yaw_list = [int(i) for i in tmp[2].strip('[]').split(' ')]
+
         self.load_size = self.opt.loadSize
 
         self.num_views = self.opt.num_views
@@ -48,10 +58,6 @@ class RPDataset(Dataset):
         self.num_sample_inout = self.opt.num_sample_inout
         self.num_sample_color = self.opt.num_sample_color
         self.num_sample_normal = self.opt.num_sample_normal
-
-        self.max_yaw_angle = 360
-        self.max_pitch_angle = self.opt.max_pitch # that's for positive and negative
-        self.mean_pitch = self.opt.mean_pitch
 
         self.subjects = self.get_subjects()
 
@@ -84,10 +90,7 @@ class RPDataset(Dataset):
             return sorted(list(all_subjects))
 
     def __len__(self):
-        pitch_size = 2 * self.max_pitch_angle + 1
-        pitch_val = pitch_size - 1 if self.is_train else 1
-        yaw_val = self.max_yaw_angle - 1 if self.is_train else self.max_yaw_angle
-        return len(self.subjects) * yaw_val * pitch_val 
+        return len(self.subjects) * len(self.yaw_list) * len(self.pitch_list)
 
     def get_render(self, subject, num_views, pitch=0, view_id=None, random_sample=False):
         '''
@@ -104,12 +107,12 @@ class RPDataset(Dataset):
             'mask': None, # [num_views, 1, H, W] segmentation masks
         '''
         if view_id is None:
-            view_id = np.random.randint(self.max_yaw_angle)
+            view_id = random.choice(self.yaw_list)
         # views are sampled evenly unless random_sample is enabled
-        view_ids = [(view_id + self.max_yaw_angle // num_views * offset) % self.max_yaw_angle
+        view_ids = [(view_id + len(self.yaw_list) // num_views * offset) % len(self.yaw_list)
                     for offset in range(num_views)]
         if random_sample:
-            view_ids = np.random.choices(self.max_yaw_angle, num_views, replace=False)
+            view_ids = np.random.choices(self.yaw_list, num_views)
 
         calib_list = []
         render_list = []
@@ -118,7 +121,7 @@ class RPDataset(Dataset):
 
         for vid in view_ids:
             param_path = os.path.join(self.PARAM, subject, '%d_%d_%02d.npy' % (vid, pitch, 0))
-            render_path = os.path.join(self.RENDER, subject, '%d_%d_%02d.jpg' % (vid, pitch, 0))
+            render_path = os.path.join(self.RENDER, subject, '%d_%d_%02d.png' % (vid, pitch, 0))
             mask_path = os.path.join(self.MASK, subject, '%d_%d_%02d.png' % (vid, pitch, 0)) 
 
             # load calibration data
@@ -307,7 +310,7 @@ class RPDataset(Dataset):
         }
 
     def get_color_sampling(self, subject, view_id, pitch=0):
-        uv_render_path = os.path.join(self.UV_RENDER, subject, '%d_%d_%02d.jpg' % (vid, pitch, 0))
+        uv_render_path = os.path.join(self.UV_RENDER, subject, '%d_%d_%02d.png' % (vid, pitch, 0))
         uv_mask_path = os.path.join(self.UV_MASK, subject, '%d_%d_%02d.png' % (vid, pitch, 0)) 
         uv_pos_path = os.path.join(self.UV_POS, subject, '%02d.exr' % (0))
         uv_normal_path = os.path.join(self.UV_NORMAL, subject, '%02d.png' % (0))
@@ -363,15 +366,9 @@ class RPDataset(Dataset):
 
             # test use pitch == 0 only
             # also train doesn't use yaw == 0
-            if self.is_train:
-                yaw_val = self.max_yaw_angle - 1
-                vid = tmp % yaw_val + 1
-                pid = tmp // yaw_val - self.max_pitch_angle + self.mean_pitch
-                pid = pid if pid < 0 else pid + 1
-            else:
-                yaw_val = self.max_yaw_angle
-                vid = tmp % yaw_val
-                pid = self.mean_pitch
+            vid = self.yaw_list[tmp % len(self.yaw_list)]
+            pid = self.pitch_list[tmp // len(self.yaw_list)]
+
             # name of the subjects 'rp_xxxx_xxx'
             subject = self.subjects[sid]
             res = {
@@ -427,7 +424,6 @@ def test(is_train=True):
             pid = tmp // yaw_val
             vid = intv_yaw * vid
             pid = intv_pitch * pid - max_pitch_angle
-        print(vid, pid)
 
 if __name__ in '__main__':
     test(True)
