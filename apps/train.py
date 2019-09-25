@@ -300,11 +300,10 @@ def train(opt):
         epoch_start_time = time.time()
 
         set_train()
+        iter_data_time = time.time()
         for train_idx, train_data in  enumerate(train_data_loader):
             if opt.linear_anneal_sigma:
                 linear_anneal_sigma(opt, cur_iter, opt.num_iter)
-
-            iter_data_time = time.time()
 
             image_tensor = train_data['img'].to(device=cuda)
             calib_tensor = train_data['calib'].to(device=cuda)
@@ -343,6 +342,7 @@ def train(opt):
                     opt.name, epoch, num_epoch, train_idx, len(train_data_loader), err.item(), ''.join(['{}: {:.4f} | '.format(k, v.item()) for k,v in errG.items()]),
                     lr, opt.sigma, iter_start_time - iter_data_time, iter_net_time - iter_start_time, int(eta // 60),
                     int(eta - 60 * (eta // 60))))
+            iter_data_time = time.time()
             
             if train_idx % opt.freq_save == 100 and train_idx != 0:
                 if multi_gpu:
@@ -373,7 +373,7 @@ def train(opt):
                 visuals['input'] = image_tensor
                 vis.display_current_results(epoch, visuals)
 
-            iter_data_time = time.time()
+            
             cur_iter += 1    
             lr = adjust_learning_rate(optimizerG, cur_iter, lr, opt.schedule, opt.gamma)
 

@@ -1,4 +1,5 @@
 import os
+import math
 import sys
 import random
 import copy
@@ -181,13 +182,21 @@ class RPOtfDataset(RPDataset):
             random.seed(1991)
             np.random.seed(1991)
         mesh = copy.deepcopy(g_mesh_dics[subject])
+        ratio = 0.8
         if 'sigma' in self.opt.sampling_mode:
-            surface_points, fid = trimesh.sample.sample_surface(mesh, 4 * self.num_sample_inout)
-            sample_points = surface_points + np.random.normal(scale=self.opt.sigma, size=surface_points.shape)
+            surface_points, fid = trimesh.sample.sample_surface(mesh, int(1.4 * ratio * self.num_sample_inout))
+            theta = 2.0 * math.pi * np.random.rand(surface_points.shape[0])
+            phi = np.arccos(1 - 2 * np.random.rand(surface_points.shape[0]))
+            x = np.sin(phi) * np.cos(theta)
+            y = np.sin(phi) * np.sin(theta)
+            z = np.cos(phi)
+            dir = np.stack([x,y,z],1)
+            radius = np.random.normal(scale=self.opt.sigma, size=[surface_points.shape[0],1])
+            sample_points = surface_points + radius * dir
         if self.opt.sampling_mode == 'uniform':
             # add random points within image space
             random_points = np.concatenate(
-                [2.0 * np.random.rand(self.num_sample_inout, 3) - 1.0, np.ones((self.num_sample_inout, 1))],
+                [2.0 * np.random.rand(2.0*self.num_sample_inout, 3) - 1.0, np.ones((2.0*self.num_sample_inout, 1))],
                 1)  # [-1,1]
             random_points = np.matmul(random_points, inv(calib).T)[:, :3]
             # length = self.B_MAX - self.B_MIN
@@ -195,7 +204,7 @@ class RPOtfDataset(RPDataset):
         elif 'uniform' in self.opt.sampling_mode:
             # add random points within image space
             random_points = np.concatenate(
-                [2.0 * np.random.rand(self.num_sample_inout, 3) - 1.0, np.ones((self.num_sample_inout, 1))],
+                [2.0 * np.random.rand(int((1.0-ratio)*self.num_sample_inout), 3) - 1.0, np.ones((int((1.0-ratio)*self.num_sample_inout), 1))],
                 1)  # [-1,1]
             random_points = np.matmul(random_points, inv(calib).T)[:, :3]
             # length = self.B_MAX - self.B_MIN
@@ -207,7 +216,6 @@ class RPOtfDataset(RPDataset):
         inbb = (inbb[:, 0] >= -1) & (inbb[:, 0] <= 1) & (inbb[:, 1] >= -1) & \
                (inbb[:, 1] <= 1) & (inbb[:, 2] >= -1) & (inbb[:, 2] <= 1)
 
-
         sample_points = sample_points[inbb]
         inside = mesh.contains(sample_points)
         inside_points = sample_points[inside]
@@ -217,7 +225,7 @@ class RPOtfDataset(RPDataset):
         inside_points = inside_points[
                         :self.num_sample_inout // 2] if nin > self.num_sample_inout // 2 else inside_points
         outside_points = outside_points[
-                         :self.num_sample_inout // 2] if nin > self.num_sample_inout // 2 else outsize_points[
+                         :self.num_sample_inout // 2] if nin > self.num_sample_inout // 2 else outside_points[
                              :(self.num_sample_inout - nin)]    
 
         samples = np.concatenate([inside_points, outside_points], 0).T # [3, N]
@@ -229,5 +237,5 @@ class RPOtfDataset(RPDataset):
         gc.collect()
         return {
             'samples': samples,
-            'labels': labels
+            'labels': labels,
         }
