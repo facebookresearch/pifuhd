@@ -11,7 +11,7 @@ class MLP(nn.Module):
                  last_op=None):
         super(MLP, self).__init__()
 
-        self.filters = nn.ModuleList()
+        self.filters = []#nn.ModuleList()
         self.num_views = num_views
         self.merge_layer = merge_layer if merge_layer > 0 else len(filter_channels) // 2
         self.res_layers = res_layers

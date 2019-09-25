@@ -106,9 +106,9 @@ def adjust_learning_rate(optimizer, epoch, lr, schedule, gamma):
             param_group['lr'] = lr
     return lr
 
-def linear_anneal_sigma(opt, cur_epoch, n_epoch):
-    if n_epoch > 1:
-        opt.sigma = (opt.sigma_min - opt.sigma_max) * cur_epoch / float(n_epoch - 1) + opt.sigma_max
+def linear_anneal_sigma(opt, cur_iter, n_iter):
+    if n_iter > 1:
+        opt.sigma = (opt.sigma_min - opt.sigma_max) * cur_iter / float(n_iter - 1) + opt.sigma_max
     else:
         opt.sigma = opt.sigma_max
 
@@ -299,11 +299,11 @@ def train(opt):
     for epoch in range(start_epoch, num_epoch):
         epoch_start_time = time.time()
 
-        if opt.linear_anneal_sigma:
-            linear_anneal_sigma(opt, epoch, num_epoch)
-
         set_train()
         for train_idx, train_data in  enumerate(train_data_loader):
+            if opt.linear_anneal_sigma:
+                linear_anneal_sigma(opt, cur_iter, opt.num_iter)
+
             iter_data_time = time.time()
 
             image_tensor = train_data['img'].to(device=cuda)

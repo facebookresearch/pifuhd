@@ -10,6 +10,7 @@ import numpy as np
 import cv2
 import random
 import torch
+import torch.nn as nn
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 
@@ -94,6 +95,17 @@ def gen_mesh(res, net, cuda, data, save_path, use_octree=False):
     # except:
     #     print('Can not create marching cubes at this time.')
 
+def total_error(errors, multi_gpu=False):
+    if multi_gpu:
+        for key in errors.keys():
+            errors[key] = errors[key].mean()
+
+    error = 0
+    error += errors['Err(occ)']
+    if 'Err(nml)' in errors:
+        error += opt.lambda_nml * errors['Err(nml)']
+    return error
+
 def compute_acc(pred, gt, thresh=0.5):
     '''
     return:
@@ -120,11 +132,11 @@ def compute_acc(pred, gt, thresh=0.5):
         return true_pos / union, true_pos / vol_pred, true_pos / vol_gt
 
 
-def calc_error(opt, net, cuda, dataset, num_tests, label=None):
+def calc_error(opt, net, cuda, dataset, num_tests, label=None, thresh=0.5):
     if num_tests > len(dataset):
         num_tests = len(dataset)
     with torch.no_grad():
-        error_arr, IOU_arr, prec_arr, recall_arr = [], [], [], []
+        error_arr, IOU_arr, prec_arr, recall_arr = {}, [], [], []
         for idx in tqdm(range(num_tests)):
             data = dataset[idx * len(dataset) // num_tests]
             # retrieve the data
@@ -134,37 +146,58 @@ def calc_error(opt, net, cuda, dataset, num_tests, label=None):
             if opt.num_views > 1:
                 sample_tensor = reshape_sample_tensor(sample_tensor, opt.num_views)
             label_tensor = data['labels'].to(device=cuda).unsqueeze(0)
+            if opt.num_sample_normal:
+                sample_nml_tensor = data['samples_nml'].to(device=cuda).unsqueeze(0)
+                label_nml_tensor = data['labels_nml'].to(device=cuda).unsqueeze(0)
+            else:
+                sample_nml_tensor = None
+                label_nml_tensor = None
 
-            net.filter(image_tensor)
-            net.query(points=sample_tensor, calibs=calib_tensor, labels=label_tensor)
+            error, res = net(image_tensor, sample_tensor, calib_tensor, label_tensor,\
+                             sample_nml_tensor, label_nml_tensor)
 
-            res = net.get_preds()
-            error = net.get_error()
+            # NOTE: in multi-GPU case, since forward returns errG with number of GPUs, we need to marge.
+            err = total_error(error, False)
 
-            IOU, prec, recall = compute_acc(res, label_tensor)
+            IOU, prec, recall = compute_acc(res, label_tensor, thresh)
 
             # print(
             #     '{0}/{1} | Error: {2:06f} IOU: {3:06f} prec: {4:06f} recall: {5:06f}'
             #         .format(idx, num_tests, error.item(), IOU.item(), prec.item(), recall.item()))
-            error_arr.append(error.item())
+            if idx == 0:
+                error_arr['Err(total)'] = [err.item()]
+                for k, v in error.items():
+                    error_arr[k] = [v.item()]
+            else:
+                error_arr['Err(total)'].append(err.item())
+                for k, v in error.items():
+                    error_arr[k].append(v.item())
             IOU_arr.append(IOU.item())
             prec_arr.append(prec.item())
             recall_arr.append(recall.item())
     
     if label is not None:
-        return {
-            'MSE-%s' % label: np.average(error_arr),
+        err = {}
+        for k, v in error_arr.items():
+            err['%s-%s' % (k, label)] = np.average(v)
+        acc = {
             'IOU-%s' % label: np.average(IOU_arr),
             'prec-%s' % label: np.average(prec_arr),
             'recall-%s' % label: np.average(recall_arr),
-        }
+        }       
+        err.update(acc)     
+        return err
     else:
-        return {
-            'MSE': np.average(error_arr),
+        err = {}
+        for k, v in error_arr.items():
+            err['%s' % k] = np.average(v)
+        acc = {
             'IOU': np.average(IOU_arr),
             'prec': np.average(prec_arr),
             'recall': np.average(recall_arr),
-        }
+        }       
+        err.update(acc)     
+        return err
 
 def eval(opt):
     cuda = torch.device('cuda:%d' % opt.gpu_id)
@@ -177,7 +210,14 @@ def eval(opt):
     print('test data size: ', len(test_dataset))
     projection_mode = test_dataset.projection_mode
 
-    netG = HGPIFuNet(opt, projection_mode).to(device=cuda)
+    ls_thresh = 0.5 # level set boundary
+    criteria = {'occ': nn.MSELoss()}
+    if opt.nml_loss_type == 'mse':
+        criteria['nml'] = nn.MSELoss()
+    elif opt.nml_loss_type == 'l1':
+        criteria['nml'] = nn.L1Loss()
+
+    netG = HGPIFuNet(opt, projection_mode, criteria).to(device=cuda)
 
     def set_eval():
         netG.eval()
