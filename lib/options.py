@@ -16,6 +16,7 @@ class BaseOptions():
         g_data.add_argument('--loadSize', type=int, default=512, help='load size of input image')
         g_data.add_argument('--classes', default='chair', type=str, help='class to use')  # only for shapenet
         g_data.add_argument('--with_mask', action='store_true', help='applying silhouette in shapenet training')
+        g_data.add_argument('--with_bg', action='store_true', help='add random background')
 
         # Experiment related
         g_exp = parser.add_argument_group('Experiment')

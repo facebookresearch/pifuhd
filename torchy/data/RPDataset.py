@@ -36,6 +36,7 @@ class RPDataset(Dataset):
         self.OBJ = os.path.join(self.root, 'GEO', 'OBJ')
         self.SAMPLE = os.path.join(self.root, 'GEO', 'SAMPLE')
         self.TSDF = os.path.join(self.root, 'GEO', 'TSDF')
+        self.BG = os.path.join(self.root, 'BG')
         
         self.B_MIN = np.array([-128, -28, -128])
         self.B_MAX = np.array([128, 228, 128])
@@ -50,6 +51,8 @@ class RPDataset(Dataset):
                 self.pitch_list = [int(i) for i in tmp[2].strip('[]').split(' ')]
             if tmp[0] == 'yaw' and phase in tmp[1]:
                 self.yaw_list = [int(i) for i in tmp[2].strip('[]').split(' ')]
+        
+        self.bg_list = [f for f in os.listdir(self.BG) if '.jpg' in f]
 
         self.load_size = self.opt.loadSize
 
@@ -114,6 +117,10 @@ class RPDataset(Dataset):
         if random_sample:
             view_ids = np.random.choices(self.yaw_list, num_views)
 
+        if not self.is_train:
+            random.seed(1991)
+            np.random.seed(1991)
+
         calib_list = []
         render_list = []
         mask_list = []
@@ -151,14 +158,19 @@ class RPDataset(Dataset):
             
             # transformation in normalized coordinates
             trans_intrinsic = np.identity(4)
+            
+            im = cv2.imread(render_path, cv2.IMREAD_UNCHANGED) / 255.0
+            im[:,:,:3] /= im[:,:,3:] + 1e-8
+            im = (255.0 * im).astype(np.uint8)[:,:,[2,1,0,3]]
+            render = Image.fromarray(im[:,:,:3]).convert('RGB')
+            mask = Image.fromarray(im[:,:,3]).convert('L')
 
-            im = Image.open(render_path, 'r')
+            if self.opt.with_bg and len(self.bg_list) != 0:
+                bg_path = os.path.join(self.BG, random.choice(self.bg_list))
+                bg = Image.open(bg_path).convert('RGB')
 
-            rgbData = im.tobytes("raw", "RGB")
-            alphaData = im.tobytes("raw", "A")
-
-            render = Image.frombytes("RGB", im.size, rgbData)
-            mask = Image.frombytes("L", im.size, alphaData)
+                render = Image.composite(render, bg, mask)
+                
             # rgbData = im.tostring("raw", "RGB")
             # alphaData = im.tostring("raw", "A")
 
@@ -219,12 +231,14 @@ class RPDataset(Dataset):
             calib = torch.Tensor(np.matmul(intrinsic, extrinsic)).float()
             extrinsic = torch.Tensor(extrinsic).float()
 
+            render = self.to_tensor(render)
+
             mask = transforms.Resize(self.load_size)(mask)
             mask = transforms.ToTensor()(mask).float()
             mask_list.append(mask)
 
-            render = self.to_tensor(render)
-            render = mask.expand_as(render) * render
+            if not self.opt.with_bg or len(self.bg_list) == 0:                
+                render = mask.expand_as(render) * render
 
             render_list.append(render)
             calib_list.append(calib)
@@ -364,7 +378,7 @@ class RPDataset(Dataset):
             'color_samples': samples,
             'rgbs': rgbs_color
         }
-
+    
     def get_item(self, index):
         # in case of IO error, use random sampling instead
         subject = ''
