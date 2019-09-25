@@ -122,7 +122,6 @@ class RPDataset(Dataset):
         for vid in view_ids:
             param_path = os.path.join(self.PARAM, subject, '%d_%d_%02d.npy' % (vid, pitch, 0))
             render_path = os.path.join(self.RENDER, subject, '%d_%d_%02d.png' % (vid, pitch, 0))
-            mask_path = os.path.join(self.MASK, subject, '%d_%d_%02d.png' % (vid, pitch, 0)) 
 
             # load calibration data
             param = np.load(param_path, allow_pickle=True)
@@ -153,8 +152,17 @@ class RPDataset(Dataset):
             # transformation in normalized coordinates
             trans_intrinsic = np.identity(4)
 
-            mask = Image.open(mask_path).convert('L')
-            render = Image.open(render_path).convert('RGB')
+            im = Image.open(render_path, 'r')
+
+            rgbData = im.tobytes("raw", "RGB")
+            alphaData = im.tobytes("raw", "A")
+
+            render = Image.frombytes("RGB", im.size, rgbData)
+            mask = Image.frombytes("L", im.size, alphaData)
+            # rgbData = im.tostring("raw", "RGB")
+            # alphaData = im.tostring("raw", "A")
+
+            # alphaImage = Image.fromstring("L", im.size, alphaData)
 
             if self.phase == 'train' and self.num_views < 2:
                 # pad images
