@@ -14,7 +14,6 @@ class BaseOptions():
                             help='path to images (data folder)')
 
         g_data.add_argument('--loadSize', type=int, default=512, help='load size of input image')
-        g_data.add_argument('--with_bg', action='store_true', help='add random background')
 
         # Experiment related
         g_exp = parser.add_argument_group('Experiment')
@@ -182,12 +181,12 @@ class BaseOptions():
         if opt.sp_enc_type == 'vol_enc':
             opt.name = '%s_vol_hg.%s.%d.%d.%d_vc.%s.%d_wbg%d_s%1.f.%1.f' % \
                 (opt.name, opt.norm, opt.num_stack, opt.hg_depth, opt.hg_dim, \
-                opt.vol_norm, opt.vol_ch, int(opt.with_bg), opt.sigma_min, opt.sigma_max)
+                opt.vol_norm, opt.vol_ch, int(opt.random_bg), opt.sigma_min, opt.sigma_max)
             opt.mlp_dim = [opt.vol_ch if opt.sp_no_pifu else opt.vol_ch + opt.hg_dim] + opt.mlp_dim
         else:
             opt.name = '%s_z_hg.%s.%d.%d.%d_wbg%d_s%1.f.%1.f' % \
                 (opt.name, opt.norm, opt.num_stack, opt.hg_depth, opt.hg_dim, \
-                 int(opt.with_bg), opt.sigma_min, opt.sigma_max)
+                 int(opt.random_bg), opt.sigma_min, opt.sigma_max)
             opt.mlp_dim = [opt.hg_dim + 1] + opt.mlp_dim
         
         # deprecated(09/25)

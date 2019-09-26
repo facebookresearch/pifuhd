@@ -113,7 +113,7 @@ class RPDataset(Dataset):
         if view_id is None:
             view_id = random.choice(self.yaw_list)
         # views are sampled evenly unless random_sample is enabled
-        view_ids = [(view_id + len(self.yaw_list) // num_views * offset) % len(self.yaw_list)
+        view_ids = [self.yaw_list[(view_id + len(self.yaw_list) // num_views * offset) % len(self.yaw_list)]
                     for offset in range(num_views)]
         if random_sample:
             view_ids = np.random.choices(self.yaw_list, num_views)
