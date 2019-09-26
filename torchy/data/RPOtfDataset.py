@@ -105,7 +105,6 @@ class RPOtfDataset(RPDataset):
                 print('loading mesh_dic...')
                 for i in tqdm(range(self.opt.num_pts_dic)):
                     g_mesh_dics = {**g_mesh_dics, **(np.load(os.path.join(self.DICT, 'trimesh_dic%d.npy' % i),allow_pickle=True).item())}
-                print(len(g_mesh_dics))
     
     def precompute_points(self, subject, num_files=1):
         SAMPLE_DIR = os.path.join(self.SAMPLE, self.opt.sampling_mode, subject)
@@ -191,7 +190,7 @@ class RPOtfDataset(RPDataset):
             y = np.sin(phi) * np.sin(theta)
             z = np.cos(phi)
             dir = np.stack([x,y,z],1)
-            radius = np.random.normal(scale=self.opt.sigma, size=[surface_points.shape[0],1])
+            radius = np.random.normal(scale=self.opt.sigma if self.is_train else 3.0, size=[surface_points.shape[0],1])
             sample_points = surface_points + radius * dir
         if self.opt.sampling_mode == 'uniform':
             # add random points within image space

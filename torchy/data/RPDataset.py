@@ -95,7 +95,7 @@ class RPDataset(Dataset):
     def __len__(self):
         return len(self.subjects) * len(self.yaw_list) * len(self.pitch_list)
 
-    def get_render(self, subject, num_views, pitch=0, view_id=None, random_sample=False):
+    def get_render(self, sid, num_views, pitch=0, view_id=None, random_sample=False):
         '''
         Return render data
         args:
@@ -109,6 +109,7 @@ class RPDataset(Dataset):
             'extrinsic': None, # [num_views, 4, 4] extrinsic matrix
             'mask': None, # [num_views, 1, H, W] segmentation masks
         '''
+        subject = self.subjects[sid]
         if view_id is None:
             view_id = random.choice(self.yaw_list)
         # views are sampled evenly unless random_sample is enabled
@@ -116,10 +117,6 @@ class RPDataset(Dataset):
                     for offset in range(num_views)]
         if random_sample:
             view_ids = np.random.choices(self.yaw_list, num_views)
-
-        if not self.is_train:
-            random.seed(1991)
-            np.random.seed(1991)
 
         calib_list = []
         render_list = []
@@ -165,17 +162,16 @@ class RPDataset(Dataset):
             render = Image.fromarray(im[:,:,:3]).convert('RGB')
             mask = Image.fromarray(im[:,:,3]).convert('L')
 
-            if self.opt.with_bg and len(self.bg_list) != 0:
-                bg_path = os.path.join(self.BG, random.choice(self.bg_list))
+            if self.opt.random_bg and len(self.bg_list) != 0:
+                if self.is_train:
+                    bg_path = os.path.join(self.BG, random.choice(self.bg_list))
+                else:
+                    uid = sid * len(self.yaw_list) * (view_id * len(self.pitch_list) + pitch) 
+                    bg_path = os.path.join(self.BG, self.bg_list[uid % len(self.bg_list)])
                 bg = Image.open(bg_path).convert('RGB')
 
                 render = Image.composite(render, bg, mask)
                 
-            # rgbData = im.tostring("raw", "RGB")
-            # alphaData = im.tostring("raw", "A")
-
-            # alphaImage = Image.fromstring("L", im.size, alphaData)
-
             if self.phase == 'train' and self.num_views < 2:
                 # pad images
                 pad_size = int(0.1 * self.load_size)
@@ -237,7 +233,7 @@ class RPDataset(Dataset):
             mask = transforms.ToTensor()(mask).float()
             mask_list.append(mask)
 
-            if not self.opt.with_bg or len(self.bg_list) == 0:                
+            if not self.opt.random_bg or len(self.bg_list) == 0:                
                 render = mask.expand_as(render) * render
 
             render_list.append(render)
@@ -331,7 +327,7 @@ class RPDataset(Dataset):
             'labels_nml': normals
         }
 
-    def get_color_sampling(self, subject, view_id, pitch=0):
+    def get_color_sampling(self, subject, vid, pitch=0):
         uv_render_path = os.path.join(self.UV_RENDER, subject, '%d_%d_%02d.png' % (vid, pitch, 0))
         uv_mask_path = os.path.join(self.UV_MASK, subject, '%d_%d_%02d.png' % (vid, pitch, 0)) 
         uv_pos_path = os.path.join(self.UV_POS, subject, '%02d.exr' % (0))
@@ -402,8 +398,8 @@ class RPDataset(Dataset):
                 'b_min': self.B_MIN,
                 'b_max': self.B_MAX,
             }
-            render_data = self.get_render(subject, num_views=self.num_views, view_id=vid,
-                                            pitch=pid, random_sample=self.opt.random_multiview)
+            render_data = self.get_render(sid, num_views=self.num_views, view_id=vid,
+                                        pitch=pid, random_sample=self.opt.random_multiview)
             sample_data = self.select_sampling_method(subject, render_data['calib'][0].numpy())        
             res.update(render_data)
             res.update(sample_data)

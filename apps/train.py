@@ -23,9 +23,6 @@ from torchy.data import *
 from torchy.model import *
 from torchy.geometry import index
 
-opt = BaseOptions().parse()
-
-writer = SummaryWriter(log_dir="./logs/%s" % opt.name)
 
 def reshape_multiview_tensors(image_tensor, calib_tensor):
     '''
@@ -112,7 +109,7 @@ def linear_anneal_sigma(opt, cur_iter, n_iter):
     else:
         opt.sigma = opt.sigma_max
 
-def total_error(errors, multi_gpu=False):
+def total_error(opt, errors, multi_gpu=False):
     if multi_gpu:
         for key in errors.keys():
             errors[key] = errors[key].mean()
@@ -174,7 +171,7 @@ def calc_error(opt, net, cuda, dataset, num_tests, label=None, thresh=0.5):
                              sample_nml_tensor, label_nml_tensor)
 
             # NOTE: in multi-GPU case, since forward returns errG with number of GPUs, we need to marge.
-            err = total_error(error, False)
+            err = total_error(opt, error, False)
 
             IOU, prec, recall = compute_acc(res, label_tensor, thresh)
 
@@ -216,7 +213,7 @@ def calc_error(opt, net, cuda, dataset, num_tests, label=None, thresh=0.5):
         err.update(acc)     
         return err
         
-def train(opt):
+def train(opt, writer):
     cuda = torch.device('cuda:%d' % opt.gpu_id)
 
     vis = Visualizer(opt)
@@ -295,7 +292,7 @@ def train(opt):
     num_epoch = 1 + opt.num_iter // len(train_data_loader)
     cur_iter = start_epoch * len(train_data_loader)
     max_IOU = 0.0
-    print(num_epoch)
+
     for epoch in range(start_epoch, num_epoch):
         epoch_start_time = time.time()
 
@@ -328,7 +325,7 @@ def train(opt):
                              sample_nml_tensor, label_nml_tensor)
 
             # NOTE: in multi-GPU case, since forward returns errG with number of GPUs, we need to marge.
-            err = total_error(errG, multi_gpu)
+            err = total_error(opt, errG, multi_gpu)
 
             optimizerG.zero_grad()
             err.backward()
@@ -373,7 +370,6 @@ def train(opt):
                 visuals['input'] = image_tensor
                 vis.display_current_results(epoch, visuals)
 
-            
             cur_iter += 1    
             lr = adjust_learning_rate(optimizerG, cur_iter, lr, opt.schedule, opt.gamma)
 
@@ -422,6 +418,12 @@ def train(opt):
                         opt.results_path, opt.name, epoch, test_data['name'], test_data['vid'], test_data['pid'])
                     gen_mesh(opt.resolution, netG if not multi_gpu else netG.module, cuda, test_data, save_path, ls_thresh)
 
+def trainerWrapper(args=None):
+    parser = BaseOptions()
+    opt = parser.parse(args)
+    parser.print_options(opt)
+    writer = SummaryWriter(log_dir="./logs/%s" % opt.name)
+    train(opt, writer)
+
 if __name__ == '__main__':
-    train(opt)
-  
+    trainerWrapper()
