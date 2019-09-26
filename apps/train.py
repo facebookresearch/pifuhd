@@ -103,11 +103,12 @@ def adjust_learning_rate(optimizer, epoch, lr, schedule, gamma):
             param_group['lr'] = lr
     return lr
 
-def linear_anneal_sigma(opt, cur_iter, n_iter):
-    if n_iter > 1:
-        opt.sigma = (opt.sigma_min - opt.sigma_max) * cur_iter / float(n_iter - 1) + opt.sigma_max
-    else:
-        opt.sigma = opt.sigma_max
+def linear_anneal_sigma(opt, cur_iter, n_iter, interval=10000):
+    if cur_iter % interval == 0:
+        if n_iter > 1:
+            opt.sigma = (opt.sigma_min - opt.sigma_max) * cur_iter / float(n_iter - 1) + opt.sigma_max
+        else:
+            opt.sigma = opt.sigma_max
 
 def total_error(opt, errors, multi_gpu=False):
     if multi_gpu:
@@ -170,14 +171,10 @@ def calc_error(opt, net, cuda, dataset, num_tests, label=None, thresh=0.5):
             error, res = net(image_tensor, sample_tensor, calib_tensor, label_tensor,\
                              sample_nml_tensor, label_nml_tensor)
 
-            # NOTE: in multi-GPU case, since forward returns errG with number of GPUs, we need to marge.
             err = total_error(opt, error, False)
 
             IOU, prec, recall = compute_acc(res, label_tensor, thresh)
 
-            # print(
-            #     '{0}/{1} | Error: {2:06f} IOU: {3:06f} prec: {4:06f} recall: {5:06f}'
-            #         .format(idx, num_tests, error.item(), IOU.item(), prec.item(), recall.item()))
             if idx == 0:
                 error_arr['Err(total)'] = [err.item()]
                 for k, v in error.items():
@@ -298,7 +295,7 @@ def train(opt, writer):
 
         set_train()
         iter_data_time = time.time()
-        for train_idx, train_data in  enumerate(train_data_loader):
+        for train_idx, train_data in enumerate(train_data_loader):
             if opt.linear_anneal_sigma:
                 linear_anneal_sigma(opt, cur_iter, opt.num_iter)
 
@@ -334,14 +331,8 @@ def train(opt, writer):
             iter_net_time = time.time()
             eta = ((iter_net_time - epoch_start_time) / (train_idx + 1)) * len(train_data_loader) - (
                     iter_net_time - epoch_start_time)
-            print(
-                'Name: %s | Epoch: %d/%d | %d/%d | Err: %.5f | %sLR: %.1e | SIG: %.1e | dataT: %.4f | netT: %.4f | ETA: %02d:%02d' % (
-                    opt.name, epoch, num_epoch, train_idx, len(train_data_loader), err.item(), ''.join(['{}: {:.4f} | '.format(k, v.item()) for k,v in errG.items()]),
-                    lr, opt.sigma, iter_start_time - iter_data_time, iter_net_time - iter_start_time, int(eta // 60),
-                    int(eta - 60 * (eta // 60))))
-            iter_data_time = time.time()
-            
-            if train_idx % opt.freq_save == 100 and train_idx != 0:
+
+            if train_idx % opt.freq_save == 0 and train_idx != 0:
                 if multi_gpu:
                     torch.save(netG.module.state_dict(), '%s/%s_train_epoch_%d' % (opt.checkpoints_path, opt.name, epoch))
                     torch.save(netG.module.state_dict(), '%s/%s_train_latest' % (opt.checkpoints_path, opt.name))
@@ -356,6 +347,11 @@ def train(opt, writer):
                 save_samples_truncted_prob(save_path, points.detach().numpy(), r.detach().numpy())
   
             if train_idx % opt.freq_plot == 0:
+                print(
+                    'Name: %s | Epoch: %d/%d | %d/%d | Err: %.5f | %sLR: %.1e | SIG: %.1e | dataT: %.4f | netT: %.4f | ETA: %02d:%02d' % (
+                        opt.name, epoch, num_epoch, train_idx, len(train_data_loader), err.item(), ''.join(['{}: {:.4f} | '.format(k, v.item()) for k,v in errG.items()]),
+                        lr, opt.sigma, iter_start_time - iter_data_time, iter_net_time - iter_start_time, int(eta // 60),
+                        int(eta - 60 * (eta // 60))))
                 counter_ratio = train_idx / len(train_data_loader)
                 losses = {}
                 losses['total_loss'] = err.item()
@@ -363,60 +359,66 @@ def train(opt, writer):
                     losses[k] = v.item()
                 vis.plot_current_losses(epoch, counter_ratio, losses)
                 for k, v in losses.items():
-                    writer.add_scalar('%s/train' % k, v, cur_iter)
+                    writer.add_scalar('%s/train-runtime' % k, v, cur_iter)
 
-            if train_idx % opt.freq_save_image == 0:
-                visuals = {}
-                visuals['input'] = image_tensor
-                vis.display_current_results(epoch, visuals)
+            if cur_iter % opt.freq_eval == 0 and cur_iter != 0 and not opt.no_numel_eval:
+                with torch.no_grad():
+                    set_eval()
+                    test_losses = {}
 
+                    print('calc error (train) ...')
+                    train_dataset.is_train = False
+                    err = calc_error(opt, netG if not multi_gpu else netG.module, cuda, train_dataset, 50, 'train', ls_thresh)
+                    train_dataset.is_train = True
+                    print('eval: ', ''.join(['{}: {:.6f} '.format(k, v) for k,v in err.items()]))
+                    test_losses.update(err)
+                    for k, v in err.items():
+                        writer.add_scalar('%s/%s' % (k.split('-')[0],'train'), v, cur_iter)
+
+                    print('calc error (test) ...')
+                    err = calc_error(opt, netG if not multi_gpu else netG.module, cuda, test_dataset, 100, 'test', ls_thresh)
+                    if err['IOU-test'] > max_IOU:
+                        max_IOU = err['IOU-test']
+                    print('eval: ', ''.join(['{}: {:.6f} '.format(k, v) for k,v in err.items()]), 'bestIOU: %.3f' % max_IOU)
+                    test_losses.update(err)
+                    for k, v in err.items():
+                        writer.add_scalar('%s/%s' % (k.split('-')[0],'test'), v, cur_iter)
+
+                    vis.plot_current_test_losses(epoch, 0, test_losses)
+                    set_train()
+
+            
+            if cur_iter % opt.freq_mesh == 0 and cur_iter != 0 and not opt.no_mesh_recon:          
+                with torch.no_grad():
+                    set_eval()
+                    print('generate mesh (train) ...')
+                    random.seed(1)
+                    data_idxs = random.sample(list(range(len(train_dataset))), k=opt.num_gen_mesh_test)
+                    for data_idx in data_idxs:
+                        train_data = train_dataset[data_idx]
+                        save_path = '%s/%s/train_eval_epoch%d_%s_%d_%d.obj' % (
+                            opt.results_path, opt.name, epoch, train_data['name'], train_data['vid'], train_data['pid'])
+                        gen_mesh(opt.resolution, netG if not multi_gpu else netG.module, cuda, train_data, save_path, ls_thresh)
+
+                    print('generate mesh (test) ...')
+                    random.seed(1)
+                    data_idxs = random.sample(list(range(len(test_dataset))), k=opt.num_gen_mesh_test)
+                    for data_idx in data_idxs:
+                        test_data = test_dataset[data_idx]
+                        save_path = '%s/%s/test_eval_epoch%d_%s_%d_%d.obj' % (
+                            opt.results_path, opt.name, epoch, test_data['name'], test_data['vid'], test_data['pid'])
+                        gen_mesh(opt.resolution, netG if not multi_gpu else netG.module, cuda, test_data, save_path, ls_thresh)
+                    set_train()
+                
+            # if train_idx % opt.freq_save_image == 0:
+            #     visuals = {}
+            #     visuals['input'] = image_tensor
+            #     vis.display_current_results(epoch, visuals)
+
+            iter_data_time = time.time()
             cur_iter += 1    
             lr = adjust_learning_rate(optimizerG, cur_iter, lr, opt.schedule, opt.gamma)
 
-        ## test
-        with torch.no_grad():
-            set_eval()
-            test_losses = {}
-
-            if not opt.no_numel_eval:
-                print('calc error (train) ...')
-                train_dataset.is_train = False
-                err = calc_error(opt, netG if not multi_gpu else netG.module, cuda, train_dataset, 100, 'train', ls_thresh)
-                train_dataset.is_train = True
-                print('eval: ', ''.join(['{}: {:.6f} '.format(k, v) for k,v in err.items()]))
-                test_losses.update(err)
-                for k, v in err.items():
-                    writer.add_scalar('%s/%s' % (k.split('-')[0],'train'), v, cur_iter)
-
-                print('calc error (test) ...')
-                err = calc_error(opt, netG if not multi_gpu else netG.module, cuda, test_dataset, 360, 'test', ls_thresh)
-                if err['IOU-test'] > max_IOU:
-                    max_IOU = err['IOU-test']
-                print('eval: ', ''.join(['{}: {:.6f} '.format(k, v) for k,v in err.items()]), 'bestIOU: %.3f' % max_IOU)
-                test_losses.update(err)
-                for k, v in err.items():
-                    writer.add_scalar('%s/%s' % (k.split('-')[0],'test'), v, cur_iter)
-
-                vis.plot_current_test_losses(epoch, 0, test_losses)
-
-            if not opt.no_mesh_recon:          
-                print('generate mesh (train) ...')
-                random.seed(1)
-                data_idxs = random.sample(list(range(len(train_dataset))), k=opt.num_gen_mesh_test)
-                for data_idx in data_idxs:
-                    train_data = train_dataset[data_idx]
-                    save_path = '%s/%s/train_eval_epoch%d_%s_%d_%d.obj' % (
-                        opt.results_path, opt.name, epoch, train_data['name'], train_data['vid'], train_data['pid'])
-                    gen_mesh(opt.resolution, netG if not multi_gpu else netG.module, cuda, train_data, save_path, ls_thresh)
-
-                print('generate mesh (test) ...')
-                random.seed(1)
-                data_idxs = random.sample(list(range(len(test_dataset))), k=opt.num_gen_mesh_test)
-                for data_idx in data_idxs:
-                    test_data = test_dataset[data_idx]
-                    save_path = '%s/%s/test_eval_epoch%d_%s_%d_%d.obj' % (
-                        opt.results_path, opt.name, epoch, test_data['name'], test_data['vid'], test_data['pid'])
-                    gen_mesh(opt.resolution, netG if not multi_gpu else netG.module, cuda, test_data, save_path, ls_thresh)
 
 def trainerWrapper(args=None):
     parser = BaseOptions()

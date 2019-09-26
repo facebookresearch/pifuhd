@@ -38,9 +38,10 @@ class BaseOptions():
         g_train.add_argument('--display_id', type=int, default=0, help='port of visdom')
         g_train.add_argument('--learning_rate', type=float, default=1e-3, help='adam learning rate')
         g_train.add_argument('--num_iter', type=int, default=30000, help='num iterations to train')
-        g_train.add_argument('--freq_plot', type=int, default=500, help='freqency of the error plot')
+        g_train.add_argument('--freq_plot', type=int, default=100, help='freqency of the error plot')
         g_train.add_argument('--freq_save', type=int, default=3000, help='freqency of the save_checkpoints')
-        g_train.add_argument('--freq_mesh', type=int, default=4000, help='freqency of the save_checkpoints')
+        g_train.add_argument('--freq_mesh', type=int, default=20000, help='freqency of the save_checkpoints')
+        g_train.add_argument('--freq_eval', type=int, default=5000, help='freqency of the save_checkpoints')
         g_train.add_argument('--freq_save_ply', type=int, default=5000, help='freqency of the save ply')
         g_train.add_argument('--freq_save_image', type=int, default=100, help='freqency of the save input image')
         g_train.add_argument('--resume_epoch', type=int, default=0, help='epoch resuming the training')
@@ -116,13 +117,13 @@ class BaseOptions():
         parser.add_argument('--gen_test_mesh', action='store_true', help='generate test mesh')
         parser.add_argument('--gen_train_mesh', action='store_true', help='generate train mesh')
         parser.add_argument('--all_mesh', action='store_true', help='generate meshs from all hourglass output')
-        parser.add_argument('--num_gen_mesh_test', type=int, default=5,
+        parser.add_argument('--num_gen_mesh_test', type=int, default=1,
                             help='how many meshes to generate during testing')
 
         # path
         parser.add_argument('--load_netG_checkpoint_path', type=str, help='path to save checkpoints')
         parser.add_argument('--checkpoints_path', type=str, default='./checkpoints', help='path to save checkpoints')
-        parser.add_argument('--results_path', type=str, default='.results', help='path to save results ply')
+        parser.add_argument('--results_path', type=str, default='./results', help='path to save results ply')
         parser.add_argument('--load_checkpoint_path', type=str, help='path to save results ply')
         parser.add_argument('--single', type=str, default='', help='single data for training')
         

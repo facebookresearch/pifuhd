@@ -173,7 +173,7 @@ class HGPIFuNet(BasePIFuNet):
         
         error['Err(occ)'] /= len(self.intermediate_preds_list)
         
-        if self.nmls is not None:
+        if self.nmls is not None and self.labels_nml is not None:
             error['Err(nml)'] = self.criteria['nml'](self.nmls, self.labels_nml)
             error['Err(occ)'] += self.criteria['occ'](self.preds_surface, 0.5*torch.ones_like(self.preds_surface))
         
