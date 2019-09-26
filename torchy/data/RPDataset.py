@@ -363,7 +363,7 @@ class RPDataset(Dataset):
             surface_colors = surface_colors[:,sample_list]
         
         # points are perturbed perpendicularly to the surface 
-        normal = torch.Tensor(surface_normal).float()
+        normal = torch.Tensor(surface_normals).float()
         offset = torch.normal(mean=torch.zeros((1, normal.size(1))), std=self.opt.sigma) * normal
         samples = torch.Tensor(surface_points).float() + offset
 
