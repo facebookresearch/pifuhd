@@ -112,6 +112,7 @@ def linear_anneal_sigma(opt, cur_iter, n_iter, interval=10000):
             opt.sigma = opt.sigma_max
 
 def total_error(opt, errors, multi_gpu=False):
+    # NOTE: in multi-GPU case, since forward returns errG with number of GPUs, we need to marge.
     if multi_gpu:
         for key in errors.keys():
             errors[key] = errors[key].mean()
@@ -279,19 +280,7 @@ def train(opt, writer):
     def set_eval():
         netG.eval()
 
-    # load checkpoints
-    state_dict_path = None
-    if opt.load_netG_checkpoint_path is not None:
-        state_dict_path = opt.load_netG_checkpoint_path
-    elif opt.continue_train and opt.resume_epoch < 0:
-        stete_dict_path = '%s/%s_train_epoch_latest' % (opt.checkpoints_path, opt.name, opt.resume_epoch)
-        opt.resume_epoch = 0
-    elif opt.continue_train:
-        stete_dict_path = '%s/%s_train_epoch_%d' % (opt.checkpoints_path, opt.name, opt.resume_epoch)
-    else:
-        opt.continue_train = False
-        opt.resume_epoch = 0
-        
+    # load checkpoints        
     if state_dict is not None:
         if 'model_state_dict' in state_dict:
             netG.load_state_dict(state_dict['model_state_dict'])
@@ -361,7 +350,6 @@ def train(opt, writer):
             errG, res = netG(image_tensor, sample_tensor, calib_tensor, label_tensor,\
                              sample_nml_tensor, label_nml_tensor)
 
-            # NOTE: in multi-GPU case, since forward returns errG with number of GPUs, we need to marge.
             err = total_error(opt, errG, multi_gpu)
 
             optimizerG.zero_grad()
@@ -429,7 +417,7 @@ def train(opt, writer):
                     }
                     torch.save(save_dict, '%s/%s_train_epoch_%d' % (opt.checkpoints_path, opt.name, epoch))
                     torch.save(save_dict, '%s/%s_train_latest' % (opt.checkpoints_path, opt.name))
-            
+
             if cur_iter % opt.freq_mesh == 0 and cur_iter != 0 and not opt.no_mesh_recon:          
                 with torch.no_grad():
                     set_eval()

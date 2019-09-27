@@ -22,7 +22,7 @@ from torchy.data import *
 from torchy.model import *
 from torchy.geometry import index
 
-opt = BaseOptions().parse()
+parser = BaseOptions()
 
 def reshape_multiview_tensors(image_tensor, calib_tensor):
     '''
@@ -65,7 +65,7 @@ def reshape_sample_tensor(sample_tensor, num_views):
     )
     return sample_tensor
 
-def gen_mesh(res, net, cuda, data, save_path, use_octree=False):
+def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=False):
     image_tensor = data['img'].to(device=cuda)
     calib_tensor = data['calib'].to(device=cuda)
 
@@ -73,29 +73,29 @@ def gen_mesh(res, net, cuda, data, save_path, use_octree=False):
 
     b_min = data['b_min']
     b_max = data['b_max']
-    # try:
-    save_img_path = save_path[:-4] + '.png'
-    save_img_list = []
-    for v in range(image_tensor.shape[0]):
-        save_img = (np.transpose(image_tensor[v].detach().cpu().numpy(), (1, 2, 0)) * 0.5 + 0.5)[:, :, ::-1] * 255.0
-        save_img_list.append(save_img)
-    save_img = np.concatenate(save_img_list, axis=1)
-    cv2.imwrite(save_img_path, save_img)
+    try:
+        save_img_path = save_path[:-4] + '.png'
+        save_img_list = []
+        for v in range(image_tensor.shape[0]):
+            save_img = (np.transpose(image_tensor[v].detach().cpu().numpy(), (1, 2, 0)) * 0.5 + 0.5)[:, :, ::-1] * 255.0
+            save_img_list.append(save_img)
+        save_img = np.concatenate(save_img_list, axis=1)
+        cv2.imwrite(save_img_path, save_img)
 
-    verts, faces, _, _ = reconstruction(
-        net, cuda, calib_tensor, res, b_min, b_max, use_octree=use_octree)
-    verts_tensor = torch.from_numpy(verts.T).unsqueeze(0).to(device=cuda).float()
-    net.calc_normal(verts_tensor, calib_tensor[:1])
-    color = net.nmls.detach().cpu().numpy()[0].T
-    # xyz_tensor = net.projection(verts_tensor, calib_tensor[:1])
-    # uv = xyz_tensor[:, :2, :]
-    # color = index(image_tensor[:1], uv).detach().cpu().numpy()[0].T
-    color = color * 0.5 + 0.5
-    save_obj_mesh_with_color(save_path, verts, faces, color)
-    # except:
-    #     print('Can not create marching cubes at this time.')
+        verts, faces, _, _ = reconstruction(
+            net, cuda, calib_tensor, res, b_min, b_max, thresh, use_octree=use_octree)
+        verts_tensor = torch.from_numpy(verts.T).unsqueeze(0).to(device=cuda).float()
+        net.calc_normal(verts_tensor, calib_tensor[:1])
+        color = net.nmls.detach().cpu().numpy()[0].T
+        # xyz_tensor = net.projection(verts_tensor, calib_tensor[:1])
+        # uv = xyz_tensor[:, :2, :]
+        # color = index(image_tensor[:1], uv).detach().cpu().numpy()[0].T
+        color = color * 0.5 + 0.5
+        save_obj_mesh_with_color(save_path, verts, faces, color)
+    except:
+        print('Can not create marching cubes at this time.')
 
-def total_error(errors, multi_gpu=False):
+def total_error(opt, errors, multi_gpu=False):
     if multi_gpu:
         for key in errors.keys():
             errors[key] = errors[key].mean()
@@ -104,6 +104,8 @@ def total_error(errors, multi_gpu=False):
     error += errors['Err(occ)']
     if 'Err(nml)' in errors:
         error += opt.lambda_nml * errors['Err(nml)']
+    if 'Err(L1)' in errors:
+        error += opt.lambda_cmp_l1 * errors['Err(L1)']
     return error
 
 def compute_acc(pred, gt, thresh=0.5):
@@ -156,14 +158,10 @@ def calc_error(opt, net, cuda, dataset, num_tests, label=None, thresh=0.5):
             error, res = net(image_tensor, sample_tensor, calib_tensor, label_tensor,\
                              sample_nml_tensor, label_nml_tensor)
 
-            # NOTE: in multi-GPU case, since forward returns errG with number of GPUs, we need to marge.
-            err = total_error(error, False)
+            err = total_error(opt, error, False)
 
             IOU, prec, recall = compute_acc(res, label_tensor, thresh)
 
-            # print(
-            #     '{0}/{1} | Error: {2:06f} IOU: {3:06f} prec: {4:06f} recall: {5:06f}'
-            #         .format(idx, num_tests, error.item(), IOU.item(), prec.item(), recall.item()))
             if idx == 0:
                 error_arr['Err(total)'] = [err.item()]
                 for k, v in error.items():
@@ -200,9 +198,34 @@ def calc_error(opt, net, cuda, dataset, num_tests, label=None, thresh=0.5):
         return err
 
 def eval(opt):
+    # load checkpoints
+    state_dict_path = None
+    if opt.load_netG_checkpoint_path is not None:
+        state_dict_path = opt.load_netG_checkpoint_path
+    elif opt.continue_train and opt.resume_epoch < 0:
+        state_dict_path = '%s/%s_train_latest' % (opt.checkpoints_path, opt.name)
+        opt.resume_epoch = 0
+    elif opt.continue_train:
+        state_dict_path = '%s/%s_train_epoch_%d' % (opt.checkpoints_path, opt.name, opt.resume_epoch)
+    else:
+        opt.continue_train = False
+        opt.resume_epoch = 0
+    
+    state_dict = None
+    if state_dict_path is not None and os.path.exists(state_dict_path):
+        print('Resuming from ', state_dict_path)
+        state_dict = torch.load(state_dict_path)    
+        if 'opt' in state_dict:
+            print('Warning: opt is overwritten.')
+            opt = state_dict['opt']
+    
+    parser.print_options(opt)
+
     cuda = torch.device('cuda:%d' % opt.gpu_id)
 
-    if opt.sampling_otf:
+    if opt.use_tsdf:
+        test_dataset = RPTSDFDataset(opt, phase='val')
+    elif opt.sampling_otf:
         test_dataset = RPOtfDataset(opt, phase='val')
     else:
         test_dataset = RPDataset(opt, phase='val')
@@ -223,20 +246,11 @@ def eval(opt):
         netG.eval()
 
     # load checkpoints
-    if opt.load_netG_checkpoint_path is not None:
-        print('loading for netG...', opt.load_netG_checkpoint_path)
-        netG.load_state_dict(torch.load(opt.load_netG_checkpoint_path, map_location=cuda))
-    else:
-        if opt.resume_epoch > 0:
-            model_path = '%s/%s_train_epoch_%d' % (opt.checkpoints_path, opt.name, opt.resume_epoch)
-        else:
-            model_path = '%s/%s_train_latest' % (opt.checkpoints_path, opt.name)
-        if os.path.exists(model_path):
-            print('Resuming from ', model_path)
-            netG.load_state_dict(torch.load(model_path, map_location=cuda))
-        else:
-            print('Error: could not find checkpoint [%s]' % model_path)
-            raise Exception('could not find checkpoint [%s]' % model_path)
+    if state_dict is not None:
+        if 'model_state_dict' in state_dict:
+            netG.load_state_dict(state_dict['model_state_dict'])
+        else: # this is deprecated but keep it for now.
+            netG.load_state_dict(state_dict)
 
     os.makedirs(opt.checkpoints_path, exist_ok=True)
     os.makedirs(opt.results_path, exist_ok=True)
@@ -257,6 +271,10 @@ def eval(opt):
                 save_path = '%s/%s/test_eval_%s_%d_%d.obj' % (
                     opt.results_path, opt.name, test_data['name'], test_data['vid'], test_data['pid'])
                 gen_mesh(opt.resolution, netG, cuda, test_data, save_path)
+
+def evalWrapper(args=None):
+    opt = parser.parse(args)
+    eval(opt)
 
 if __name__ == '__main__':
     eval(opt)
