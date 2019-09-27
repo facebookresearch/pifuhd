@@ -39,12 +39,11 @@ class BaseOptions():
         g_train.add_argument('--learning_rate', type=float, default=1e-3, help='adam learning rate')
         g_train.add_argument('--num_iter', type=int, default=30000, help='num iterations to train')
         g_train.add_argument('--freq_plot', type=int, default=100, help='freqency of the error plot')
-        g_train.add_argument('--freq_save', type=int, default=3000, help='freqency of the save_checkpoints')
         g_train.add_argument('--freq_mesh', type=int, default=20000, help='freqency of the save_checkpoints')
         g_train.add_argument('--freq_eval', type=int, default=5000, help='freqency of the save_checkpoints')
         g_train.add_argument('--freq_save_ply', type=int, default=5000, help='freqency of the save ply')
         g_train.add_argument('--freq_save_image', type=int, default=100, help='freqency of the save input image')
-        g_train.add_argument('--resume_epoch', type=int, default=0, help='epoch resuming the training')
+        g_train.add_argument('--resume_epoch', type=int, default=-1, help='epoch resuming the training')
         g_train.add_argument('--continue_train', action='store_true', help='continue training: load the latest model')
 
         # Testing related

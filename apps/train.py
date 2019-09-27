@@ -23,6 +23,7 @@ from torchy.data import *
 from torchy.model import *
 from torchy.geometry import index
 
+parser = BaseOptions()
 
 def reshape_multiview_tensors(image_tensor, calib_tensor):
     '''
@@ -211,6 +212,29 @@ def calc_error(opt, net, cuda, dataset, num_tests, label=None, thresh=0.5):
         return err
         
 def train(opt, writer):
+    # load checkpoints
+    state_dict_path = None
+    if opt.load_netG_checkpoint_path is not None:
+        state_dict_path = opt.load_netG_checkpoint_path
+    elif opt.continue_train and opt.resume_epoch < 0:
+        state_dict_path = '%s/%s_train_latest' % (opt.checkpoints_path, opt.name)
+        opt.resume_epoch = 0
+    elif opt.continue_train:
+        state_dict_path = '%s/%s_train_epoch_%d' % (opt.checkpoints_path, opt.name, opt.resume_epoch)
+    else:
+        opt.continue_train = False
+        opt.resume_epoch = 0
+    
+    state_dict = None
+    if state_dict_path is not None and os.path.exists(state_dict_path):
+        print('Resuming from ', state_dict_path)
+        state_dict = torch.load(state_dict_path)    
+        if 'opt' in state_dict:
+            print('Warning: opt is overwritten.')
+            opt = state_dict['opt']
+    
+    parser.print_options(opt)
+
     cuda = torch.device('cuda:%d' % opt.gpu_id)
 
     vis = Visualizer(opt)
@@ -244,7 +268,7 @@ def train(opt, writer):
     elif opt.nml_loss_type == 'l1':
         criteria['nml'] = nn.L1Loss()
 
-    netG = HGPIFuNet(opt, projection_mode, criteria).to(device=cuda)
+    netG = HGPIFuNet(opt, projection_mode, criteria)
     lr = opt.learning_rate
     
     def set_train():
@@ -254,19 +278,30 @@ def train(opt, writer):
         netG.eval()
 
     # load checkpoints
+    state_dict_path = None
     if opt.load_netG_checkpoint_path is not None:
-        print('loading for netG...', opt.load_netG_checkpoint_path)
-        netG.load_state_dict(torch.load(opt.load_netG_checkpoint_path, map_location=cuda))
-
-    if opt.continue_train:
-        model_path = '%s/%s_train_epoch_%d' % (opt.checkpoints_path, opt.name, opt.resume_epoch)
-        if os.path.exists(model_path):
-            print('Resuming from ', model_path)
-            netG.load_state_dict(torch.load(model_path, map_location=cuda))
-        else:
-            print('Error: could not find checkpoint [%s]' % model_path)
-            opt.continue_train = False
+        state_dict_path = opt.load_netG_checkpoint_path
+    elif opt.continue_train and opt.resume_epoch < 0:
+        stete_dict_path = '%s/%s_train_epoch_latest' % (opt.checkpoints_path, opt.name, opt.resume_epoch)
+        opt.resume_epoch = 0
+    elif opt.continue_train:
+        stete_dict_path = '%s/%s_train_epoch_%d' % (opt.checkpoints_path, opt.name, opt.resume_epoch)
+    else:
+        opt.continue_train = False
+        opt.resume_epoch = 0
+        
+    if state_dict is not None:
+        if 'model_state_dict' in state_dict:
+            netG.load_state_dict(state_dict['model_state_dict'])
+        else: # this is deprecated but keep it for now.
+            netG.load_state_dict(state_dict)
+    
+        if 'epoch' in state_dict:
+            opt.resume_epoch = state_dict['epoch']
+        if opt.resume_epoch < 0:
             opt.resume_epoch = 0
+ 
+    netG = netG.to(device=cuda)
     
     multi_gpu = False
     if torch.cuda.device_count() > 1:
@@ -275,6 +310,9 @@ def train(opt, writer):
         multi_gpu = True
 
     optimizerG = torch.optim.RMSprop(netG.parameters(), lr=opt.learning_rate, momentum=0, weight_decay=0)
+
+    if state_dict is not None and 'optimizer_state_dict' in state_dict:
+        optimizerG.load_state_dict(state_dict['optimizer_state_dict'])
 
     os.makedirs(opt.checkpoints_path, exist_ok=True)
     os.makedirs(opt.results_path, exist_ok=True)
@@ -332,14 +370,6 @@ def train(opt, writer):
             eta = ((iter_net_time - epoch_start_time) / (train_idx + 1)) * len(train_data_loader) - (
                     iter_net_time - epoch_start_time)
 
-            if train_idx % opt.freq_save == 0 and train_idx != 0:
-                if multi_gpu:
-                    torch.save(netG.module.state_dict(), '%s/%s_train_epoch_%d' % (opt.checkpoints_path, opt.name, epoch))
-                    torch.save(netG.module.state_dict(), '%s/%s_train_latest' % (opt.checkpoints_path, opt.name))
-                else:
-                    torch.save(netG.state_dict(), '%s/%s_train_epoch_%d' % (opt.checkpoints_path, opt.name, epoch))
-                    torch.save(netG.state_dict(), '%s/%s_train_latest' % (opt.checkpoints_path, opt.name))
-
             if train_idx % opt.freq_save_ply == 0 and train_idx != 0:
                 save_path = '%s/%s/test_epoch%d_idx%d.ply' % (opt.results_path, opt.name, epoch, train_idx)
                 r = res[0].cpu()
@@ -361,32 +391,42 @@ def train(opt, writer):
                 for k, v in losses.items():
                     writer.add_scalar('%s/train-runtime' % k, v, cur_iter)
 
-            if cur_iter % opt.freq_eval == 0 and cur_iter != 0 and not opt.no_numel_eval:
+            if cur_iter % opt.freq_eval == 0 and cur_iter != 0:
                 with torch.no_grad():
-                    set_eval()
                     test_losses = {}
+                    if not opt.no_numel_eval:
+                        set_eval()
+                        print('calc error (train) ...')
+                        train_dataset.is_train = False
+                        err = calc_error(opt, netG if not multi_gpu else netG.module, cuda, train_dataset, 50, 'train', ls_thresh)
+                        train_dataset.is_train = True
+                        print('eval: ', ''.join(['{}: {:.6f} '.format(k, v) for k,v in err.items()]))
+                        test_losses.update(err)
+                        for k, v in err.items():
+                            writer.add_scalar('%s/%s' % (k.split('-')[0],'train'), v, cur_iter)
 
-                    print('calc error (train) ...')
-                    train_dataset.is_train = False
-                    err = calc_error(opt, netG if not multi_gpu else netG.module, cuda, train_dataset, 50, 'train', ls_thresh)
-                    train_dataset.is_train = True
-                    print('eval: ', ''.join(['{}: {:.6f} '.format(k, v) for k,v in err.items()]))
-                    test_losses.update(err)
-                    for k, v in err.items():
-                        writer.add_scalar('%s/%s' % (k.split('-')[0],'train'), v, cur_iter)
+                        print('calc error (test) ...')
+                        err = calc_error(opt, netG if not multi_gpu else netG.module, cuda, test_dataset, 100, 'test', ls_thresh)
+                        if err['IOU-test'] > max_IOU:
+                            max_IOU = err['IOU-test']
+                        print('eval: ', ''.join(['{}: {:.6f} '.format(k, v) for k,v in err.items()]), 'bestIOU: %.3f' % max_IOU)
+                        test_losses.update(err)
+                        for k, v in err.items():
+                            writer.add_scalar('%s/%s' % (k.split('-')[0],'test'), v, cur_iter)
 
-                    print('calc error (test) ...')
-                    err = calc_error(opt, netG if not multi_gpu else netG.module, cuda, test_dataset, 100, 'test', ls_thresh)
-                    if err['IOU-test'] > max_IOU:
-                        max_IOU = err['IOU-test']
-                    print('eval: ', ''.join(['{}: {:.6f} '.format(k, v) for k,v in err.items()]), 'bestIOU: %.3f' % max_IOU)
-                    test_losses.update(err)
-                    for k, v in err.items():
-                        writer.add_scalar('%s/%s' % (k.split('-')[0],'test'), v, cur_iter)
+                        vis.plot_current_test_losses(epoch, 0, test_losses)
+                        set_train()
 
-                    vis.plot_current_test_losses(epoch, 0, test_losses)
-                    set_train()
-
+                    save_dict = {
+                        'opt': opt,
+                        'epoch': epoch,
+                        'cur_iter': cur_iter,
+                        'model_state_dict': netG.state_dict() if not multi_gpu else netG.module.state_dict(),
+                        'optimizer_state_dict': optimizerG.state_dict(),
+                        'loss': test_losses
+                    }
+                    torch.save(save_dict, '%s/%s_train_epoch_%d' % (opt.checkpoints_path, opt.name, epoch))
+                    torch.save(save_dict, '%s/%s_train_latest' % (opt.checkpoints_path, opt.name))
             
             if cur_iter % opt.freq_mesh == 0 and cur_iter != 0 and not opt.no_mesh_recon:          
                 with torch.no_grad():
@@ -421,9 +461,7 @@ def train(opt, writer):
 
 
 def trainerWrapper(args=None):
-    parser = BaseOptions()
     opt = parser.parse(args)
-    parser.print_options(opt)
     writer = SummaryWriter(log_dir="./logs/%s" % opt.name)
     train(opt, writer)
 
