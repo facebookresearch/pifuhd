@@ -202,14 +202,11 @@ def eval(opt):
     state_dict_path = None
     if opt.load_netG_checkpoint_path is not None:
         state_dict_path = opt.load_netG_checkpoint_path
-    elif opt.continue_train and opt.resume_epoch < 0:
+    elif opt.resume_epoch < 0:
         state_dict_path = '%s/%s_train_latest' % (opt.checkpoints_path, opt.name)
         opt.resume_epoch = 0
-    elif opt.continue_train:
-        state_dict_path = '%s/%s_train_epoch_%d' % (opt.checkpoints_path, opt.name, opt.resume_epoch)
     else:
-        opt.continue_train = False
-        opt.resume_epoch = 0
+        state_dict_path = '%s/%s_train_epoch_%d' % (opt.checkpoints_path, opt.name, opt.resume_epoch)
     
     state_dict = None
     if state_dict_path is not None and os.path.exists(state_dict_path):
@@ -218,6 +215,8 @@ def eval(opt):
         if 'opt' in state_dict:
             print('Warning: opt is overwritten.')
             opt = state_dict['opt']
+    else:
+        raise Exception('failed loading state dict!')
     
     parser.print_options(opt)
 
@@ -277,5 +276,5 @@ def evalWrapper(args=None):
     eval(opt)
 
 if __name__ == '__main__':
-    eval(opt)
+    evalWrapper()
   
