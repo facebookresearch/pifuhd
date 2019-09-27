@@ -96,6 +96,7 @@ class BaseOptions():
                              help='# of dimensions of mlp. no need to put the first channel')
         g_model.add_argument('--mlp_res_layers', nargs='+', default=[2,3,4], type=int,
                              help='leyers that has skip connection. use 0 for no residual pass')
+        g_model.add_argument('--use_compose', action='store_true', help='use multi part composition')
 
         # for train
         parser.add_argument('--random_flip', action='store_true', help='if random flip')
@@ -106,7 +107,8 @@ class BaseOptions():
         parser.add_argument('--schedule', type=int, nargs='+', default=[10, 15],
                             help='Decrease learning rate at these epochs.')
         parser.add_argument('--gamma', type=float, default=0.1, help='LR is multiplied by gamma on schedule.')
-        parser.add_argument('--lambda_nml', type=float, default=1, help='weight of normal loss')
+        parser.add_argument('--lambda_nml', type=float, default=0.0, help='weight of normal loss')
+        parser.add_argument('--lambda_cmp_l1', type=float, default=0.0, help='weight of normal loss')
         parser.add_argument('--nml_loss_type', type=str, default='mse', help='mse | l1')
         parser.add_argument('--no_finetune', action='store_true', help='fine tuning netG in training C')
 

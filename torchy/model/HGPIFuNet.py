@@ -33,7 +33,8 @@ class HGPIFuNet(BasePIFuNet):
             filter_channels=self.opt.mlp_dim,
             num_views=self.num_views,
             res_layers=self.opt.mlp_res_layers,
-            last_op=nn.Sigmoid())
+            last_op=nn.Sigmoid(),
+            compose=self.opt.use_compose)
 
         if self.opt.sp_enc_type == 'vol_enc':
             self.spatial_enc = VolumetricEncoder(opt)
@@ -177,6 +178,9 @@ class HGPIFuNet(BasePIFuNet):
             error['Err(nml)'] = self.criteria['nml'](self.nmls, self.labels_nml)
             error['Err(occ)'] += self.criteria['occ'](self.preds_surface, 0.5*torch.ones_like(self.preds_surface))
         
+        if self.mlp.y_nways is not None and self.opt.lambda_cmp_l1 != 0.0:
+            error['Err(L1)'] = self.mlp.y_nways.abs().sum(1).mean()
+
         return error
 
     def forward(self, images, points, calibs, labels, points_nml=None, labels_nml=None):

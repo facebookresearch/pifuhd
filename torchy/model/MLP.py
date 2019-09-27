@@ -8,7 +8,8 @@ class MLP(nn.Module):
                  num_views=1, 
                  merge_layer=0,
                  res_layers=[],
-                 last_op=None):
+                 last_op=None,
+                 compose=False):
         super(MLP, self).__init__()
 
         self.filters = nn.ModuleList()
@@ -16,6 +17,8 @@ class MLP(nn.Module):
         self.merge_layer = merge_layer if merge_layer > 0 else len(filter_channels) // 2
         self.res_layers = res_layers
         self.last_op = last_op
+        self.compose = compose
+        self.y_nways = None # only for part composition
 
         for l in range(0, len(filter_channels)-1):
             if l in self.res_layers:
@@ -58,5 +61,9 @@ class MLP(nn.Module):
 
         if self.last_op is not None:
             y = self.last_op(y)
+
+        if self.compose and y.size(1) != 1:
+            self.y_nways = y
+            y = y.max(dim=1, keepdim=True)[0]
 
         return y
