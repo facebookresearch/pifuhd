@@ -354,7 +354,7 @@ def train(opt, writer):
                         int(eta - 60 * (eta // 60))))
                 counter_ratio = train_idx / len(train_data_loader)
                 losses = {}
-                losses['total_loss'] = err.item()
+                losses['Err(total)'] = err.item()
                 for k, v in errG.items():
                     losses[k] = v.item()
                 vis.plot_current_losses(epoch, counter_ratio, losses)
