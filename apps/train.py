@@ -119,6 +119,8 @@ def total_error(opt, errors, multi_gpu=False):
     error += errors['Err(occ)']
     if 'Err(nml)' in errors:
         error += opt.lambda_nml * errors['Err(nml)']
+    if 'Err(L1)' in errors:
+        error += opt.lambda_cmp_l1 * errors['Err(L1)']
     return error
 
 def compute_acc(pred, gt, thresh=0.5):
