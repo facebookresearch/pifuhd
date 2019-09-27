@@ -83,7 +83,7 @@ def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=False):
         cv2.imwrite(save_img_path, save_img)
 
         verts, faces, _, _ = reconstruction(
-            net, cuda, calib_tensor, res, b_min, b_max, thresh, use_octree=use_octree)
+            net, cuda, calib_tensor, res, b_min, b_max, thresh, use_octree=use_octree, num_samples=500000)
         verts_tensor = torch.from_numpy(verts.T).unsqueeze(0).to(device=cuda).float()
         net.calc_normal(verts_tensor, calib_tensor[:1])
         color = net.nmls.detach().cpu().numpy()[0].T
@@ -92,8 +92,8 @@ def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=False):
         # color = index(image_tensor[:1], uv).detach().cpu().numpy()[0].T
         color = color * 0.5 + 0.5
         save_obj_mesh_with_color(save_path, verts, faces, color)
-    except:
-        print('Can not create marching cubes at this time.')
+    except Exception as e:
+        print(e)
 
 def total_error(opt, errors, multi_gpu=False):
     if multi_gpu:
@@ -216,7 +216,7 @@ def eval(opt):
             print('Warning: opt is overwritten.')
             opt = state_dict['opt']
     else:
-        raise Exception('failed loading state dict!')
+        raise Exception('failed loading state dict!', state_dict_path)
     
     parser.print_options(opt)
 
@@ -253,7 +253,7 @@ def eval(opt):
 
     os.makedirs(opt.checkpoints_path, exist_ok=True)
     os.makedirs(opt.results_path, exist_ok=True)
-    os.makedirs('%s/%s' % (opt.results_path, opt.name), exist_ok=True)
+    os.makedirs('%s/%s/eval' % (opt.results_path, opt.name), exist_ok=True)
 
     ## test
     with torch.no_grad():
@@ -261,13 +261,13 @@ def eval(opt):
 
         if not opt.no_numel_eval:
             print('calc error (test) ...')
-            err = calc_error(opt, netG, cuda, test_dataset, 360, 'test')
+            err = calc_error(opt, netG, cuda, test_dataset, 100, 'test')
             print('eval: ', ''.join(['{}: {:.6f} '.format(k, v) for k,v in err.items()]))
 
         if not opt.no_mesh_recon:
             print('generate mesh (test) ...')
             for test_data in tqdm(test_dataset):
-                save_path = '%s/%s/test_eval_%s_%d_%d.obj' % (
+                save_path = '%s/%s/eval/test_eval_%s_%d_%d.obj' % (
                     opt.results_path, opt.name, test_data['name'], test_data['vid'], test_data['pid'])
                 gen_mesh(opt.resolution, netG, cuda, test_data, save_path)
 
