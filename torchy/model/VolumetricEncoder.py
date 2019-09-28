@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from .HGFilters import *
 from .HG3D import *
 from .UNet3D import *
+from .SimpleNet3D import *
 from ..geometry import index3d
 
 class VolumetricEncoder(nn.Module):
@@ -16,9 +17,13 @@ class VolumetricEncoder(nn.Module):
 
         self.image2vol = HGFilter(1, opt.vol_hg_depth, 32 * self.vol_ch, opt.vol_norm, 'ave_pool', False)
         if self.opt.vol_net == 'hg':
-            self.vol_enc = HGFilter3D(self.vol_ch, 1, 2, self.vol_ch, opt.vol_norm, 'ave_pool', False)
+            self.vol_enc = HGFilter3D(self.vol_ch, 1, 3, self.vol_ch, opt.vol_norm, 'ave_pool', False)
         elif self.opt.vol_net == 'unet':
             self.vol_enc = UnetGenerator(self.vol_ch, self.vol_ch, ngf=2*self.vol_ch, norm=opt.vol_norm)
+        elif self.opt.vol_net == 'simple_1':
+            self.vol_enc = Simple3DNet(self.vol_ch, 1, 2, opt.vol_norm)
+        elif self.opt.vol_net == 'simple_c':
+            self.vol_enc = Simple3DNet(self.vol_ch, self.vol_ch, 2, opt.vol_norm)
 
         self.vol_feat = None
     
