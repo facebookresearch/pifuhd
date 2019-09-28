@@ -155,6 +155,21 @@ class HGPIFuNet(BasePIFuNet):
         self.nmls = nml
         self.preds_surface = pred[:,:,:,0]
 
+    def calc_comp_ids(self, points, calibs, transforms=None):
+        '''
+            return the component id
+            NOTE: this is valid only for mlp with compose=True
+        '''
+        self.query(points, calibs)
+        self.get_preds()
+
+        nways = None
+        if self.mlp.y_nways is not None:
+            nways = self.mlp.y_nways.max(1)[1]
+
+        return nways
+
+
     def get_im_feat(self):
         '''
         return the image filter in the last stack

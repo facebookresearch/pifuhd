@@ -13,6 +13,9 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 from torch.utils.data import DataLoader
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+import matplotlib
 
 from lib.options import BaseOptions
 from lib.visualizer import Visualizer
@@ -23,6 +26,21 @@ from torchy.model import *
 from torchy.geometry import index
 
 parser = BaseOptions()
+
+def label_to_color(nways, N=10):
+    '''
+    args:
+        nwaysL [N] integer numpy array
+    return:
+        [N, 3] color numpy array
+    '''
+    mapper = cm.ScalarMappable(norm=matplotlib.colors.Normalize(vmin=0, vmax=N), cmap=plt.get_cmap('tab10'))
+
+    colors = []
+    for v in nways.tolist():
+        colors.append(mapper.to_rgba(float(v)))
+
+    return np.stack(colors, 0)[:,:3]
 
 def reshape_multiview_tensors(image_tensor, calib_tensor):
     '''
@@ -65,7 +83,7 @@ def reshape_sample_tensor(sample_tensor, num_views):
     )
     return sample_tensor
 
-def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=False):
+def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=False, components=False):
     image_tensor = data['img'].to(device=cuda)
     calib_tensor = data['calib'].to(device=cuda)
 
@@ -85,8 +103,12 @@ def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=False):
         verts, faces, _, _ = reconstruction(
             net, cuda, calib_tensor, res, b_min, b_max, thresh, use_octree=use_octree, num_samples=500000)
         verts_tensor = torch.from_numpy(verts.T).unsqueeze(0).to(device=cuda).float()
-        net.calc_normal(verts_tensor, calib_tensor[:1])
-        color = net.nmls.detach().cpu().numpy()[0].T
+        if not components:
+            net.calc_normal(verts_tensor, calib_tensor[:1])
+            color = net.nmls.detach().cpu().numpy()[0].T
+        else:
+            nways = net.calc_comp_ids(verts_tensor, calib_tensor[:1])
+            color = label_to_color(nways[0].detach().cpu().numpy())
         # xyz_tensor = net.projection(verts_tensor, calib_tensor[:1])
         # uv = xyz_tensor[:, :2, :]
         # color = index(image_tensor[:1], uv).detach().cpu().numpy()[0].T
@@ -269,7 +291,7 @@ def eval(opt):
             for test_data in tqdm(test_dataset):
                 save_path = '%s/%s/eval/test_eval_%s_%d_%d.obj' % (
                     opt.results_path, opt.name, test_data['name'], test_data['vid'], test_data['pid'])
-                gen_mesh(opt.resolution, netG, cuda, test_data, save_path)
+                gen_mesh(opt.resolution, netG, cuda, test_data, save_path, components=opt.use_compose)
 
 def evalWrapper(args=None):
     opt = parser.parse(args)

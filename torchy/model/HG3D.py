@@ -3,8 +3,10 @@ import torch.nn as nn
 import torch.nn.functional as F 
 
 def conv3x3(in_planes, out_planes, strd=1, padding=1, axis=0, bias=False):
-    kernel = (1, 1, 1)
+    kernel = [1, 1, 1]
+    padding = [0, 0, 0]
     kernel[axis % 3] = 3
+    padding[axis % 3] = 1
     return nn.Conv3d(in_planes, out_planes, kernel_size=kernel,
                      stride=strd, padding=padding, bias=bias)
 
@@ -22,8 +24,8 @@ class ConvBlock(nn.Module):
             self.bn4 = nn.BatchNorm3d(in_planes)
         elif norm == 'group':
             self.bn1 = nn.GroupNorm(32, in_planes)
-            self.bn2 = nn.GroupNorm(32, int(out_planes / 2))
-            self.bn3 = nn.GroupNorm(32, int(out_planes / 4))
+            self.bn2 = nn.GroupNorm(16, int(out_planes / 2))
+            self.bn3 = nn.GroupNorm(8, int(out_planes / 4))
             self.bn4 = nn.GroupNorm(32, in_planes)
         
         if in_planes != out_planes:
@@ -90,7 +92,7 @@ class HourGlass3D(nn.Module):
         low3 = low2
         low3 = self._modules['b3_' + str(level)](low3)
 
-        up2 = F.interpolate(low3, scale_factor=2, mode='blinear')
+        up2 = F.interpolate(low3, scale_factor=2, mode='trilinear')
 
         return up1 + up2
     
