@@ -95,7 +95,7 @@ class RPDataset(Dataset):
     def __len__(self):
         return len(self.subjects) * len(self.yaw_list) * len(self.pitch_list)
 
-    def get_render(self, sid, num_views, pitch=0, view_id=None, random_sample=False):
+    def get_render(self, sid, num_views, pid=0, view_id=None, random_sample=False):
         '''
         Return render data
         args:
@@ -117,6 +117,8 @@ class RPDataset(Dataset):
                     for offset in range(num_views)]
         if random_sample:
             view_ids = np.random.choices(self.yaw_list, num_views)
+
+        pitch = self.pitch_list[pid]
 
         calib_list = []
         render_list = []
@@ -384,8 +386,8 @@ class RPDataset(Dataset):
 
             # test use pitch == 0 only
             # also train doesn't use yaw == 0
-            vid = self.yaw_list[tmp % len(self.yaw_list)]
-            pid = self.pitch_list[tmp // len(self.yaw_list)]
+            vid = tmp % len(self.yaw_list)
+            pid = tmp // len(self.yaw_list)
 
             # name of the subjects 'rp_xxxx_xxx'
             subject = self.subjects[sid]
