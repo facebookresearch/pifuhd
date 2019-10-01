@@ -171,7 +171,7 @@ def recon(opt):
 
     os.makedirs(opt.checkpoints_path, exist_ok=True)
     os.makedirs(opt.results_path, exist_ok=True)
-    os.makedirs('%s/%s/eval' % (opt.results_path, opt.name), exist_ok=True)
+    os.makedirs('%s/%s/recon' % (opt.results_path, opt.name), exist_ok=True)
 
     ## test
     with torch.no_grad():
@@ -179,7 +179,7 @@ def recon(opt):
 
         print('generate mesh (test) ...')
         for test_data in tqdm(test_dataset):
-            save_path = '%s/%s/result_%s.obj' % (opt.results_path, opt.name, test_data['name'])
+            save_path = '%s/%s/recon/result_%s.obj' % (opt.results_path, opt.name, test_data['name'])
             gen_mesh(opt.resolution, netG, cuda, test_data, save_path, components=opt.use_compose)
 
 def reconWrapper(args=None):
