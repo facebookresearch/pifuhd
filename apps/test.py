@@ -236,7 +236,11 @@ def eval(opt):
         state_dict = torch.load(state_dict_path)    
         if 'opt' in state_dict:
             print('Warning: opt is overwritten.')
+            no_numel_eval = opt.no_numel_eval
+            no_mesh_recon = opt.no_mesh_recon
             opt = state_dict['opt']
+            opt.no_numel_eval = no_numel_eval
+            opt.no_mesh_recon = no_mesh_recon
     else:
         raise Exception('failed loading state dict!', state_dict_path)
     
