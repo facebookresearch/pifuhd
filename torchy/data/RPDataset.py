@@ -401,7 +401,7 @@ class RPDataset(Dataset):
                 'b_max': self.B_MAX,
             }
             render_data = self.get_render(sid, num_views=self.num_views, view_id=vid,
-                                        pitch=pid, random_sample=self.opt.random_multiview)
+                                        pid=pid, random_sample=self.opt.random_multiview)
             sample_data = self.select_sampling_method(subject, render_data['calib'][0].numpy())        
             res.update(render_data)
             res.update(sample_data)
