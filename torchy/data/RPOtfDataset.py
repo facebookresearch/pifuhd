@@ -109,43 +109,44 @@ class RPOtfDataset(RPDataset):
     def precompute_points(self, subject, num_files=1):
         SAMPLE_DIR = os.path.join(self.SAMPLE, self.opt.sampling_mode, subject)
 
-        mesh = g_mesh_dics[subject]
-
+        mesh = copy.deepcopy(g_mesh_dics[subject])
+        ratio = 0.8
         for i in tqdm(range(num_files)):
-            inside_file = os.path.join(SAMPLE_DIR, '%05d.in.xyz' % i)
-            outside_file = os.path.join(SAMPLE_DIR, '%05d.ou.xyz' % i)
-
+            data_file = os.path.join(SAMPLE_DIR, '%05d.io' % i)
             if 'sigma' in self.opt.sampling_mode:
-                surface_points, fid = trimesh.sample.sample_surface_even(mesh, 4 * self.num_sample_inout)
-                sample_points = surface_points + np.random.normal(scale=self.opt.sigma, size=surface_points.shape)
+                surface_points, fid = trimesh.sample.sample_surface_even(mesh, int(ratio * self.num_sample_inout))
+                theta = 2.0 * math.pi * np.random.rand(surface_points.shape[0])
+                phi = np.arccos(1 - 2 * np.random.rand(surface_points.shape[0]))
+                x = np.sin(phi) * np.cos(theta)
+                y = np.sin(phi) * np.sin(theta)
+                z = np.cos(phi)
+                dir = np.stack([x,y,z],1)
+                radius = np.random.normal(scale=self.opt.sigma, size=[surface_points.shape[0],1])
+                sample_points = surface_points + radius * dir
             if self.opt.sampling_mode == 'uniform':
                 # add random points within image space
+                random_points = np.concatenate(
+                    [2.0 * np.random.rand(2.0*self.num_sample_inout, 3) - 1.0, np.ones((2.0*self.num_sample_inout, 1))],
+                    1)  # [-1,1]
                 length = self.B_MAX - self.B_MIN
                 sample_points = np.random.rand(self.num_sample_inout, 3) * length + self.B_MIN
             elif 'uniform' in self.opt.sampling_mode:
                 # add random points within image space
-                random_points = np.concatenate(
-                    [2.0 * np.random.rand(self.num_sample_inout, 3) - 1.0, np.ones((self.num_sample_inout, 1))],
-                    1)  # [-1,1]
                 length = self.B_MAX - self.B_MIN
-                random_points = np.random.rand(self.num_sample_inout // 4, 3) * length + self.B_MIN
+                random_points = np.random.rand(int((1.0-ratio)*self.num_sample_inout), 3) * length + self.B_MIN
                 sample_points = np.concatenate([sample_points, random_points], 0)
                 np.random.shuffle(sample_points)
 
             inside = mesh.contains(sample_points)
-            inside_points = sample_points[inside]
-            outside_points = sample_points[np.logical_not(inside)]
 
-            nin = inside_points.shape[0]
-            inside_points = inside_points[
-                            :self.num_sample_inout // 2] if nin > self.num_sample_inout // 2 else inside_points
-            outside_points = outside_points[
-                            :self.num_sample_inout // 2] if nin > self.num_sample_inout // 2 else outsize_points[
-                                :(self.num_sample_inout - nin)]    
-
+            data = {'points': sample_points, 'labels': inside}
+            
             os.makedirs(SAMPLE_DIR, exist_ok=True)
-            np.save(inside_file, inside_points)
-            np.save(outside_file, outside_points)
+            np.save(data_file, data)
+
+        del mesh
+        gc.collect()
+
 
     def precompute_tsdf(self, subject, num_files=100, sigma=1.0):
         TSDF_DIR = os.path.join(self.TSDF, self.opt.sampling_mode, subject)
@@ -183,7 +184,7 @@ class RPOtfDataset(RPDataset):
         mesh = copy.deepcopy(g_mesh_dics[subject])
         ratio = 0.8
         if 'sigma' in self.opt.sampling_mode:
-            surface_points, fid = trimesh.sample.sample_surface(mesh, int(1.4 * ratio * self.num_sample_inout))
+            surface_points, fid = trimesh.sample.sample_surface_even(mesh, int(1.4 * ratio * self.num_sample_inout))
             theta = 2.0 * math.pi * np.random.rand(surface_points.shape[0])
             phi = np.arccos(1 - 2 * np.random.rand(surface_points.shape[0]))
             x = np.sin(phi) * np.cos(theta)

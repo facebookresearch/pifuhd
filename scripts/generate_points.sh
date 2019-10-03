@@ -2,7 +2,7 @@ set -ex
 
 # Dataset
 DATASET='renderppl'
-DATAROOT='/home/shunsukesaito/data/hf_human_new'
+DATAROOT='/home/shunsukesaito/data/hf_human_full'
 
 # Training
 NAME='devfair'
@@ -10,7 +10,7 @@ NAME='devfair'
 SAMPLE_MODE='sigma1_uniform'
 SIGMA_MAX=1.0
 
-NUM_SAMPLE=100000
+NUM_SAMPLE=500000
 
 CHECKPOINTS_PATH='./checkpoints'
 RESULTS_PATH='./results'

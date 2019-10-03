@@ -85,7 +85,9 @@ class RPDataset(Dataset):
         else:
             var_subjects = set([])
 
-        if self.is_train:
+        if self.phase == 'all':
+            return sorted(list(all_subjects))
+        elif self.is_train:
             return sorted(list(all_subjects - var_subjects))
         elif len(var_subjects) != 0:
             return sorted(list(var_subjects))

@@ -234,7 +234,10 @@ def train(opt, writer):
         state_dict = torch.load(state_dict_path)    
         if 'opt' in state_dict:
             print('Warning: opt is overwritten.')
+            continue_train = opt.continue_train
             opt = state_dict['opt']
+            opt.continue_train = continue_train
+            
     
     parser.print_options(opt)
 
@@ -316,7 +319,8 @@ def train(opt, writer):
     # training
     start_epoch = 0 if not opt.continue_train else opt.resume_epoch
     num_epoch = 1 + opt.num_iter // len(train_data_loader)
-    cur_iter = start_epoch * len(train_data_loader)
+    cur_iter = state_dict['cur_iter'] if state_dict is not None and 'cur_iter' in state_dict \
+                else start_epoch * len(train_data_loader)
     max_IOU = 0.0
 
     for epoch in range(start_epoch, num_epoch):
