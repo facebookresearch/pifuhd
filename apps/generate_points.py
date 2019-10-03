@@ -34,7 +34,7 @@ def precompute_points(opt):
     dataset.opt.simga = 5
     dataset.opt.sampleing_mode = 'uniform_simga5'
     for sub in subjects:
-        dataset.precompute_points(sub, num_files=200)
+        dataset.precompute_points(sub, num_files=100)
 
     # for i in range(1, 10, 2):
     #     dataset.opt.sigma = float(i)

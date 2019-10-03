@@ -3,6 +3,8 @@ import math
 import sys
 import random
 import copy
+import gzip 
+import time
 
 import numpy as np 
 from numpy.linalg import inv
@@ -112,7 +114,7 @@ class RPOtfDataset(RPDataset):
         mesh = copy.deepcopy(g_mesh_dics[subject])
         ratio = 0.8
         for i in tqdm(range(num_files)):
-            data_file = os.path.join(SAMPLE_DIR, '%05d.io' % i)
+            data_file = os.path.join(SAMPLE_DIR, '%05d.io.npy' % i)
             if 'sigma' in self.opt.sampling_mode:
                 surface_points, fid = trimesh.sample.sample_surface_even(mesh, int(ratio * self.num_sample_inout))
                 theta = 2.0 * math.pi * np.random.rand(surface_points.shape[0])
@@ -138,11 +140,22 @@ class RPOtfDataset(RPDataset):
                 np.random.shuffle(sample_points)
 
             inside = mesh.contains(sample_points)
+            inside_points = sample_points[inside]
+            outside_points = sample_points[np.logical_not(inside)]
 
-            data = {'points': sample_points, 'labels': inside}
-            
+            data = {'in': inside_points, 'out': outside_points}
+
             os.makedirs(SAMPLE_DIR, exist_ok=True)
             np.save(data_file, data)
+            # f = gzip.GzipFile(data_file, "w")
+            # np.save(file=f, arr=data)
+            # f.close()
+            
+            # t1 = time.time()
+            # # f = gzip.GzipFile(data_file, "r")
+            # # np.load(f, allow_pickle=True)
+            # np.load(data_file, allow_pickle=True)
+            # print(time.time() - t1)
 
         del mesh
         gc.collect()

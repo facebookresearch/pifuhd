@@ -2,13 +2,13 @@ set -ex
 
 # Dataset
 DATASET='renderppl'
-DATAROOT='/home/shunsukesaito/data/hf_human_full'
+DATAROOT='/home/shunsukesaito/data/hf_human_v2'
 
 # Training
 NAME='devfair'
 
-SAMPLE_MODE='sigma1_uniform'
-SIGMA_MAX=1.0
+SAMPLE_MODE='uniform_sigma5'
+SIGMA_MAX=5.0
 
 NUM_SAMPLE=500000
 
