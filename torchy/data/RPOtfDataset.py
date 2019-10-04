@@ -115,7 +115,6 @@ class RPOtfDataset(RPDataset):
         ratio = 0.8
         for i in tqdm(range(num_files)):
             data_file = os.path.join(SAMPLE_DIR, '%05d.io.npy' % i)
-            t1 = time.time()
             if 'sigma' in self.opt.sampling_mode:
                 surface_points, fid = trimesh.sample.sample_surface(mesh, int(ratio * self.num_sample_inout))
                 theta = 2.0 * math.pi * np.random.rand(surface_points.shape[0])
@@ -139,11 +138,8 @@ class RPOtfDataset(RPDataset):
                 random_points = np.random.rand(int((1.0-ratio)*self.num_sample_inout), 3) * length + self.B_MIN
                 sample_points = np.concatenate([sample_points, random_points], 0)
                 np.random.shuffle(sample_points)
-            t2 = time.time()
 
             inside = mesh.contains(sample_points)
-            t3 = time.time()
-            print(t2-t1, t3-t2)
             inside_points = sample_points[inside]
             outside_points = sample_points[np.logical_not(inside)]
 
