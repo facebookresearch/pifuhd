@@ -211,7 +211,7 @@ class RPDataset(Dataset):
                     dx = 0
                     dy = 0
 
-                trans_intrinsic[0, 3] = -dy / float(self.opt.loadSize // 2)
+                trans_intrinsic[0, 3] = -dx / float(self.opt.loadSize // 2)
                 trans_intrinsic[1, 3] = -dy / float(self.opt.loadSize // 2)
 
                 x1 = int(round((w - tw) / 2.)) + dx
