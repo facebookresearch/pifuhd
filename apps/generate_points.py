@@ -33,6 +33,7 @@ def precompute_points(opt):
     print('# of subjects: ', len(subjects))
     dataset.opt.simga = 5
     dataset.opt.sampleing_mode = 'uniform_simga5'
+
     for sub in subjects:
         dataset.precompute_points(sub, num_files=100)
 

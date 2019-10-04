@@ -2,7 +2,7 @@ set -ex
 
 # Dataset
 DATASET='renderppl'
-DATAROOT='/home/shunsukesaito/data/hf_human_v2'
+DATAROOT='./../../data/hf_human_full'
 
 # Training
 NAME='devfair'
@@ -26,4 +26,4 @@ python ./apps/generate_points.py \
     --num_sample_inout ${NUM_SAMPLE} \
     --sampling_mode ${SAMPLE_MODE} \
     --sampling_otf \
-    --sigma_max ${SIGMA_MAX} \
+    --sigma_max ${SIGMA_MAX}
