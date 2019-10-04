@@ -78,6 +78,7 @@ class BaseOptions():
         g_model.add_argument('--netG', type=str, default='hgpifu', help='piximp | fanimp')
 
         # hgimp specific
+        g_model.add_argument('--hg_use_attention', action='store_true', help='use self attention')
         g_model.add_argument('--num_stack', type=int, default=4, help='# of hourglass')
         g_model.add_argument('--hg_depth', type=int, default=2, help='# of stacked layer of hourglass')
         g_model.add_argument('--hg_down', type=str, default='ave_pool', help='ave pool || conv64 || conv128')
@@ -99,6 +100,7 @@ class BaseOptions():
         g_model.add_argument('--use_compose', action='store_true', help='use multi part composition')
 
         # for train
+        parser.add_argument('--random_body_chop', action='store_true', help='if random flip')
         parser.add_argument('--random_flip', action='store_true', help='if random flip')
         parser.add_argument('--random_trans', action='store_true', help='if random flip')
         parser.add_argument('--random_scale', action='store_true', help='if random flip')

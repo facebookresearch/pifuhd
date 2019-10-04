@@ -27,7 +27,7 @@ class HGPIFuNet(BasePIFuNet):
         self.opt = opt
         self.num_views = self.opt.num_views
         self.image_filter = HGFilter(opt.num_stack, opt.hg_depth, opt.hg_dim, 
-                                     opt.norm, opt.hg_down, False)
+                                     opt.norm, opt.hg_down, False, opt.hg_use_attention)
 
         self.mlp = MLP(
             filter_channels=self.opt.mlp_dim,

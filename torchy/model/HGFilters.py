@@ -94,10 +94,11 @@ class HourGlass(nn.Module):
         
 
 class HGFilter(nn.Module):
-    def __init__(self, stack, depth, last_ch, norm='batch', down_type='conv64', use_sigmoid=True):
+    def __init__(self, stack, depth, last_ch, norm='batch', down_type='conv64', use_sigmoid=True, use_attention=False):
         super(HGFilter, self).__init__()
         self.n_stack = stack
         self.use_sigmoid = use_sigmoid
+        self.use_attention = use_attention
         self.depth = depth
         self.last_ch = last_ch
         self.norm = norm
@@ -135,7 +136,8 @@ class HGFilter(nn.Module):
                 self.add_module('bn_end' + str(stack), nn.GroupNorm(32, 256))
             
             self.add_module('l' + str(stack),
-                            nn.Conv2d(256, self.last_ch, kernel_size=1, stride=1, padding=0))
+                            nn.Conv2d(256, self.last_ch if not self.use_attention else self.last_ch + 1, 
+                            kernel_size=1, stride=1, padding=0))
             
             if stack < self.n_stack - 1:
                 self.add_module(
@@ -172,6 +174,9 @@ class HGFilter(nn.Module):
                        (self._modules['conv_last' + str(i)](ll)), True)
 
             tmp_out = self._modules['l' + str(i)](ll)
+            if self.use_attention:
+                tmp_out = nn.Sigmoid()(tmp_out[:,-1:]) * tmp_out[:,:-1]
+
             if self.use_sigmoid:
                 outputs.append(nn.Tanh()(tmp_out))
             else:

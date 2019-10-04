@@ -22,6 +22,7 @@ import torchvision.transforms as transforms
 
 from tqdm import tqdm
 from .RPDataset import RPDataset
+from lib.sample_util import *
 
 import gc
 
@@ -189,7 +190,7 @@ class RPOtfDataset(RPDataset):
             np.save(tsdf_file, sample_points)
               
 
-    def select_sampling_method(self, subject, calib):
+    def select_sampling_method(self, subject, calib, mask=None):
         # test only
         if not self.is_train:
             random.seed(1991)
@@ -197,7 +198,7 @@ class RPOtfDataset(RPDataset):
         mesh = copy.deepcopy(g_mesh_dics[subject])
         ratio = 0.8
         if 'sigma' in self.opt.sampling_mode:
-            surface_points, fid = trimesh.sample.sample_surface_even(mesh, int(1.4 * ratio * self.num_sample_inout))
+            surface_points, fid = trimesh.sample.sample_surface(mesh, int(4.0 * ratio * self.num_sample_inout))
             theta = 2.0 * math.pi * np.random.rand(surface_points.shape[0])
             phi = np.arccos(1 - 2 * np.random.rand(surface_points.shape[0]))
             x = np.sin(phi) * np.cos(theta)
@@ -225,12 +226,21 @@ class RPOtfDataset(RPDataset):
             sample_points = np.concatenate([sample_points, random_points], 0)
             np.random.shuffle(sample_points)
 
-        inbb = np.matmul(np.concatenate([sample_points, np.ones((sample_points.shape[0],1))], 1), calib.T)[:, :3]
-        inbb = (inbb[:, 0] >= -1) & (inbb[:, 0] <= 1) & (inbb[:, 1] >= -1) & \
-               (inbb[:, 1] <= 1) & (inbb[:, 2] >= -1) & (inbb[:, 2] <= 1)
+        ptsh = np.matmul(np.concatenate([sample_points, np.ones((sample_points.shape[0],1))], 1), calib.T)[:, :3]
+        inbb = (ptsh[:, 0] >= -1) & (ptsh[:, 0] <= 1) & (ptsh[:, 1] >= -1) & \
+               (ptsh[:, 1] <= 1) & (ptsh[:, 2] >= -1) & (ptsh[:, 2] <= 1)
 
         sample_points = sample_points[inbb]
         inside = mesh.contains(sample_points)
+
+        if mask is not None:
+            ptsh = ptsh[inbb]
+            x = (self.load_size * (-0.5 * ptsh[:,0] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
+            y = (self.load_size * (0.5 * ptsh[:,1] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
+            idx = y * self.load_size + x
+            inmask = mask.reshape(-1)[idx] > 0
+            inside = inside & inmask
+        
         inside_points = sample_points[inside]
         outside_points = sample_points[np.logical_not(inside)]
 
@@ -242,8 +252,11 @@ class RPOtfDataset(RPDataset):
                              :(self.num_sample_inout - nin)]    
 
         samples = np.concatenate([inside_points, outside_points], 0).T # [3, N]
-        samples = torch.Tensor(samples).float()
         labels = np.concatenate([np.ones((1, inside_points.shape[0])), np.zeros((1, outside_points.shape[0]))], 1)
+
+        # save_samples_truncted_prob('test.ply', samples.T, labels.T)
+        # cv2.waitKey(0)
+        samples = torch.Tensor(samples).float()
         labels = torch.Tensor(labels).float()
         
         del mesh

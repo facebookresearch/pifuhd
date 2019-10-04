@@ -12,6 +12,12 @@ import torch
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 
+def loadPoses(root, subjects):
+    dic = {}
+    for sub in subjects:
+        dic[sub] = np.load(os.path.join(root, '%s_100k.npy' % sub))
+
+    return dic
 
 class RPDataset(Dataset):
     @staticmethod
@@ -37,14 +43,21 @@ class RPDataset(Dataset):
         self.SAMPLE = os.path.join(self.root, 'GEO', 'SAMPLE')
         self.TSDF = os.path.join(self.root, 'GEO', 'TSDF')
         self.BG = os.path.join(self.root, 'BG')
+        self.POSE = os.path.join(self.root, 'POSE')
         
         self.B_MIN = np.array([-128, -28, -128])
         self.B_MAX = np.array([128, 228, 128])
         # self.B_MIN = np.array([-120, -20, -64])
         # self.B_MAX = np.array([120, 220, 64])
 
-        file = open(os.path.join(self.root,'info.txt'),'r')
+        try:
+            file = open(os.path.join(self.root,'info.txt'),'r')
+        except:
+            raise IOError('%s does not exist!' % os.path.join(self.root,'info.txt'))
+
         lines = [f.strip() for f in file.readlines()]
+        self.yaw_list = []
+        self.pitch_list = []
         for l in lines:
             tmp = l.split(',')
             if tmp[0] == 'pitch' and phase in tmp[1]:
@@ -64,6 +77,8 @@ class RPDataset(Dataset):
 
         self.subjects = self.get_subjects()
 
+        self.poses = loadPoses(self.POSE, self.subjects)
+
         # PIL to tensor
         self.to_tensor = transforms.Compose([
             transforms.Resize(self.load_size),
@@ -81,7 +96,8 @@ class RPDataset(Dataset):
     def get_subjects(self):
         all_subjects = set(os.listdir(self.RENDER))
         if os.path.exists(os.path.join(self.root, 'val.txt')):
-            var_subjects = set(np.loadtxt(os.path.join(self.root, 'val.txt'), dtype=str))
+            arr = np.atleast_1d(np.loadtxt(os.path.join(self.root, 'val.txt'), dtype=str))
+            var_subjects = set(arr)
         else:
             var_subjects = set([])
 
@@ -122,6 +138,8 @@ class RPDataset(Dataset):
 
         pitch = self.pitch_list[pid]
 
+        pose3d = self.poses[subject]
+
         calib_list = []
         render_list = []
         mask_list = []
@@ -159,10 +177,18 @@ class RPDataset(Dataset):
             
             # transformation in normalized coordinates
             trans_intrinsic = np.identity(4)
-            
+
+            intrinsic = np.matmul(ndc_intrinsic, scale_intrinsic)
+            calib = np.matmul(intrinsic, extrinsic)
+            pose2d = np.matmul(calib, np.concatenate([pose3d, np.ones_like(pose3d[:,:1])], 1).T)
+
             im = cv2.imread(render_path, cv2.IMREAD_UNCHANGED) / 255.0
             im[:,:,:3] /= im[:,:,3:] + 1e-8
             im = (255.0 * im).astype(np.uint8)[:,:,[2,1,0,3]]
+            if self.opt.random_body_chop and np.random.rand() > 0.5 and self.is_train:
+                y_offset = random.randint(-100,0)
+                if y_offset != 0:
+                    im[y_offset:,:,3] = 0.0
             render = Image.fromarray(im[:,:,:3]).convert('RGB')
             mask = Image.fromarray(im[:,:,3]).convert('L')
 
@@ -239,6 +265,10 @@ class RPDataset(Dataset):
 
             if not self.opt.random_bg or len(self.bg_list) == 0:                
                 render = mask.expand_as(render) * render
+
+            # img = render.permute(1,2,0).numpy()[:,:,::-1]
+            # cv2.imshow('image', (0.5*img + 0.5))
+            # cv2.waitKey(1)
 
             render_list.append(render)
             calib_list.append(calib)
@@ -404,7 +434,7 @@ class RPDataset(Dataset):
             }
             render_data = self.get_render(sid, num_views=self.num_views, view_id=vid,
                                         pid=pid, random_sample=self.opt.random_multiview)
-            sample_data = self.select_sampling_method(subject, render_data['calib'][0].numpy())        
+            sample_data = self.select_sampling_method(subject, render_data['calib'][0].numpy(), render_data['mask'][0].numpy())        
             res.update(render_data)
             res.update(sample_data)
             if self.num_sample_normal:
