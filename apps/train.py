@@ -86,11 +86,11 @@ def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=False):
         verts, faces, _, _ = reconstruction(
             net, cuda, calib_tensor, res, b_min, b_max, thresh, use_octree=use_octree)
         verts_tensor = torch.from_numpy(verts.T).unsqueeze(0).to(device=cuda).float()
-        net.calc_normal(verts_tensor, calib_tensor[:1])
-        color = net.nmls.detach().cpu().numpy()[0].T
-        # xyz_tensor = net.projection(verts_tensor, calib_tensor[:1])
-        # uv = xyz_tensor[:, :2, :]
-        # color = index(image_tensor[:1], uv).detach().cpu().numpy()[0].T
+        # net.calc_normal(verts_tensor, calib_tensor[:1])
+        # color = net.nmls.detach().cpu().numpy()[0].T
+        xyz_tensor = net.projection(verts_tensor, calib_tensor[:1])
+        uv = xyz_tensor[:, :2, :]
+        color = index(image_tensor[:1], uv).detach().cpu().numpy()[0].T
         color = color * 0.5 + 0.5
         save_obj_mesh_with_color(save_path, verts, faces, color)
     except:
