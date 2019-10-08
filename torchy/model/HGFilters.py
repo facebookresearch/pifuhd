@@ -94,7 +94,7 @@ class HourGlass(nn.Module):
         
 
 class HGFilter(nn.Module):
-    def __init__(self, stack, depth, last_ch, norm='batch', down_type='conv64', use_sigmoid=True, use_attention=False):
+    def __init__(self, stack, depth, last_ch, norm='batch', down_type='conv64', use_sigmoid=True, use_attention=False, n_pixshuffle=1):
         super(HGFilter, self).__init__()
         self.n_stack = stack
         self.use_sigmoid = use_sigmoid
@@ -102,9 +102,12 @@ class HGFilter(nn.Module):
         self.depth = depth
         self.last_ch = last_ch
         self.norm = norm
+        self.n_pixshuffle = n_pixshuffle
         self.down_type = down_type
 
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3)
+
+        last_ch = self.last_ch * (self.n_pixshuffle**2)
 
         if self.norm == 'batch':
             self.bn1 = nn.BatchNorm2d(64)
@@ -136,14 +139,14 @@ class HGFilter(nn.Module):
                 self.add_module('bn_end' + str(stack), nn.GroupNorm(32, 256))
             
             self.add_module('l' + str(stack),
-                            nn.Conv2d(256, self.last_ch if not self.use_attention else self.last_ch + 1, 
+                            nn.Conv2d(256, last_ch  if not self.use_attention else last_ch + 1, 
                             kernel_size=1, stride=1, padding=0))
             
             if stack < self.n_stack - 1:
                 self.add_module(
                     'bl' + str(stack), nn.Conv2d(256, 256, kernel_size=1, stride=1, padding=0))
                 self.add_module(
-                    'al' + str(stack), nn.Conv2d(self.last_ch, 256, kernel_size=1, stride=1, padding=0))
+                    'al' + str(stack), nn.Conv2d(last_ch, 256, kernel_size=1, stride=1, padding=0))
 
     def forward(self, x):
         x = F.relu(self.bn1(self.conv1(x)), True)
@@ -177,10 +180,14 @@ class HGFilter(nn.Module):
             if self.use_attention:
                 tmp_out = nn.Sigmoid()(tmp_out[:,-1:]) * tmp_out[:,:-1]
 
+
             if self.use_sigmoid:
                 outputs.append(nn.Tanh()(tmp_out))
             else:
-                outputs.append(tmp_out)
+                if self.n_pixshuffle != 1:
+                    outputs.append(nn.PixelShuffle(self.n_pixshuffle)(tmp_out))
+                else:
+                    outputs.append(tmp_out)
             
             if i < self.n_stack - 1:
                 ll = self._modules['bl' + str(i)](ll)

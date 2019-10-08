@@ -104,7 +104,7 @@ def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=False, comp
         cv2.imwrite(save_img_path, save_img)
 
         verts, faces, _, _ = reconstruction(
-            net, cuda, calib_tensor, res, b_min, b_max, thresh, use_octree=use_octree, num_samples=100000)
+            net, cuda, calib_tensor, res, b_min, b_max, thresh, use_octree=use_octree, num_samples=10000)
         verts_tensor = torch.from_numpy(verts.T).unsqueeze(0).to(device=cuda).float()
         # if not components:
         #     net.calc_normal(verts_tensor, calib_tensor[:1])
@@ -139,10 +139,12 @@ def recon(opt):
         if 'opt' in state_dict:
             print('Warning: opt is overwritten.')
             dataroot = opt.dataroot
+            resolution = opt.resolution
             no_numel_eval = opt.no_numel_eval
             no_mesh_recon = opt.no_mesh_recon
             opt = state_dict['opt']
             opt.dataroot = dataroot
+            opt.resolution = resolution
             opt.no_numel_eval = no_numel_eval
             opt.no_mesh_recon = no_mesh_recon
     else:
