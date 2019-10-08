@@ -196,7 +196,7 @@ class RPOtfDataset(RPDataset):
             random.seed(1991)
             np.random.seed(1991)
         mesh = copy.deepcopy(g_mesh_dics[subject])
-        ratio = 0.8
+        ratio = 0.6
         if 'sigma' in self.opt.sampling_mode:
             surface_points, fid = trimesh.sample.sample_surface(mesh, int(4.0 * ratio * self.num_sample_inout))
             theta = 2.0 * math.pi * np.random.rand(surface_points.shape[0])
@@ -235,7 +235,7 @@ class RPOtfDataset(RPDataset):
 
         if mask is not None:
             ptsh = ptsh[inbb]
-            x = (self.load_size * (-0.5 * ptsh[:,0] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
+            x = (self.load_size * (0.5 * ptsh[:,0] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
             y = (self.load_size * (0.5 * ptsh[:,1] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
             idx = y * self.load_size + x
             inmask = mask.reshape(-1)[idx] > 0
@@ -244,6 +244,8 @@ class RPOtfDataset(RPDataset):
         inside_points = sample_points[inside]
         outside_points = sample_points[np.logical_not(inside)]
 
+        # total_size = sample_points.shape[0]
+        # print(inside_points.shape[0]/total_size, outside_points.shape[0]/total_size)
         nin = inside_points.shape[0]
         inside_points = inside_points[
                         :self.num_sample_inout // 2] if nin > self.num_sample_inout // 2 else inside_points

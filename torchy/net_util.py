@@ -66,3 +66,18 @@ def get_norm_layer(norm_type='instance'):
         raise NotImplementedError('normalization layer [%s] is not found' % norm_type)
     return norm_layer
 
+class CustomBCELoss(nn.Module):
+    def __init__(self, brock=False):
+        super(CustomBCELoss, self).__init__()
+        self.brock = brock
+
+    def forward(self, pred, gt, ratio=0.7):
+        if self.brock:
+            x_hat = torch.clamp(pred, 1e-7, 1.0-1e-7) # prevent log(0) from happening
+            x = 3.0*gt - 1.0 # rescaled to [-1,2]
+
+            loss = -(ratio*x*torch.log(x_hat) + (1.0-ratio)*(1.0-x)*torch.log(1.0-x_hat))
+        else:
+            loss = -(ratio*gt*torch.log(pred) + (1.0-ratio)*(1.0-gt)*torch.log(1.0-pred))
+
+        return loss.mean()

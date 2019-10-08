@@ -48,7 +48,7 @@ class BaseOptions():
 
         # Testing related
         g_test = parser.add_argument_group('Testing')
-        g_test.add_argument('--resolution', type=int, default=512, help='# of grid in mesh reconstruction')
+        g_test.add_argument('--resolution', type=int, default=256, help='# of grid in mesh reconstruction')
         g_test.add_argument('--no_numel_eval', action='store_true', help='no numerical evaluation')
         g_test.add_argument('--no_mesh_recon', action='store_true', help='no mesh reconstruction')
 
@@ -105,6 +105,7 @@ class BaseOptions():
         parser.add_argument('--random_flip', action='store_true', help='if random flip')
         parser.add_argument('--random_trans', action='store_true', help='if random flip')
         parser.add_argument('--random_scale', action='store_true', help='if random flip')
+        parser.add_argument('--random_rotate', action='store_true', help='if random flip')
         parser.add_argument('--random_bg', action='store_true', help='using random background')
 
         parser.add_argument('--schedule', type=int, nargs='+', default=[10, 15],
@@ -112,6 +113,7 @@ class BaseOptions():
         parser.add_argument('--gamma', type=float, default=0.1, help='LR is multiplied by gamma on schedule.')
         parser.add_argument('--lambda_nml', type=float, default=0.0, help='weight of normal loss')
         parser.add_argument('--lambda_cmp_l1', type=float, default=0.0, help='weight of normal loss')
+        parser.add_argument('--occ_loss_type', type=str, default='mse', help='bce | brock_bce | mse')
         parser.add_argument('--nml_loss_type', type=str, default='mse', help='mse | l1')
         parser.add_argument('--no_finetune', action='store_true', help='fine tuning netG in training C')
 
@@ -121,7 +123,7 @@ class BaseOptions():
         parser.add_argument('--gen_test_mesh', action='store_true', help='generate test mesh')
         parser.add_argument('--gen_train_mesh', action='store_true', help='generate train mesh')
         parser.add_argument('--all_mesh', action='store_true', help='generate meshs from all hourglass output')
-        parser.add_argument('--num_gen_mesh_test', type=int, default=1,
+        parser.add_argument('--num_gen_mesh_test', type=int, default=4,
                             help='how many meshes to generate during testing')
 
         # path

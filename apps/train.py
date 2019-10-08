@@ -22,6 +22,7 @@ from lib.sample_util import *
 from torchy.data import *
 from torchy.model import *
 from torchy.geometry import index
+from torchy.net_util import CustomBCELoss
 
 parser = BaseOptions()
 
@@ -269,10 +270,21 @@ def train(opt, writer):
 
     ls_thresh = 0.5 # level set boundary
     criteria = {'occ': nn.MSELoss()}
+    if opt.occ_loss_type == 'bce':
+        criteria['occ'] = CustomBCELoss(False)
+    elif opt.occ_loss_type == 'brock_bce':
+        criteria['occ'] = CustomBCELoss(True)
+    elif opt.occ_loss_type == 'mse':
+        criteria['occ'] = nn.MSELoss()
+    else:
+        raise NameError('unknown loss type %s' % opt.occ_loss_type)
+
     if opt.nml_loss_type == 'mse':
         criteria['nml'] = nn.MSELoss()
     elif opt.nml_loss_type == 'l1':
         criteria['nml'] = nn.L1Loss()
+    else:
+        raise NameError('unknown loss type %s' % opt.nml_loss_type)
 
     netG = HGPIFuNet(opt, projection_mode, criteria)
     lr = opt.learning_rate

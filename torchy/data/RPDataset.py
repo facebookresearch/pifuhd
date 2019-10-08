@@ -219,26 +219,43 @@ class RPDataset(Dataset):
 
                 # random scale 
                 if self.opt.random_scale:
-                    rand_scale = random.uniform(0.9, 1.1)
+                    rand_scale = random.uniform(0.8, 1.4)
                     w = int(rand_scale * w)
                     h = int(rand_scale * h)
                     render = render.resize((w, h), Image.BILINEAR)
                     mask = mask.resize((w, h), Image.NEAREST)
                     scale_intrinsic *= rand_scale
                     scale_intrinsic[3, 3] = 1
+                
+                if self.opt.random_rotate:
+                    rotate_degree = (random.random()-0.5) * 2 * 10.0
+                    theta = -(rotate_degree/180.) * np.pi
+                    rotMatrix = np.array([[np.cos(theta), -np.sin(theta)], 
+                                        [np.sin(theta),  np.cos(theta)]])
+                    center = np.array([[render.size[0]/2,render.size[1]/2]])
+                    rot_matrix = np.identity(4)
+                    rot_matrix[:2,:2] = rotMatrix
+
+                    scale_intrinsic = np.matmul(rot_matrix, scale_intrinsic)
+                    render = render.rotate(rotate_degree, Image.BILINEAR)
+                    mask = mask.rotate(rotate_degree, Image.BILINEAR)
 
                 # random translate in the pixel space
                 if self.opt.random_trans:
-                    dx = random.randint(-int(round((w-tw)/10.0)),
-                                        int(round((w-tw)/10.0)))
-                    dy = random.randint(-int(round((h-th)/10.0)),
-                                        int(round((h-th)/10.0)))
+                    padding = int(1.1 * tw - w)
+                    if padding > 0:
+                        render = ImageOps.expand(render, border=(padding,padding), fill=0)
+                        mask = ImageOps.expand(mask, border=(padding, padding), fill=0)
+                    w, h = render.size
+                    dx = random.randint(-int(round((w-tw)/8.0)),
+                                        int(round((w-tw)/8.0)))
+                    dy = random.randint(-int(round((h-th)/8.0)),
+                                        int(round((h-th)/8.0)))
+                    trans_intrinsic[0, 3] = (-dx) / float(self.opt.loadSize // 2)
+                    trans_intrinsic[1, 3] = (-dy) / float(self.opt.loadSize // 2)
                 else:
                     dx = 0
                     dy = 0
-
-                trans_intrinsic[0, 3] = -dx / float(self.opt.loadSize // 2)
-                trans_intrinsic[1, 3] = -dy / float(self.opt.loadSize // 2)
 
                 x1 = int(round((w - tw) / 2.)) + dx
                 y1 = int(round((h - th) / 2.)) + dy
@@ -435,6 +452,17 @@ class RPDataset(Dataset):
             render_data = self.get_render(sid, num_views=self.num_views, view_id=vid,
                                         pid=pid, random_sample=self.opt.random_multiview)
             sample_data = self.select_sampling_method(subject, render_data['calib'][0].numpy(), render_data['mask'][0].numpy())        
+            # p = sample_data['samples'].t().numpy()
+            # calib = render_data['calib'][0].numpy()
+            # mask = 255.0*np.stack(3*[render_data['mask'][0,0].numpy()],2)
+            # p = np.matmul(np.concatenate([p, np.ones((p.shape[0],1))], 1), calib.T)[:, :3]
+            # pts = 512*(0.5*p[sample_data['labels'].numpy().reshape(-1) == 1.0]+0.5)
+            # print(pts.shape)
+            # for p in pts:
+            #     mask = cv2.circle(mask, (int(p[0]),int(p[1])), 2, (0,255,0), -1)
+            # print(mask.shape)
+            # cv2.imwrite('tmp.png', mask)
+            # exit()
             res.update(render_data)
             res.update(sample_data)
             if self.num_sample_normal:
