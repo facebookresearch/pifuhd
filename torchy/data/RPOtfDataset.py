@@ -218,7 +218,7 @@ class RPOtfDataset(RPDataset):
         elif 'uniform' in self.opt.sampling_mode:
             # add random points within image space
             random_points = np.concatenate(
-                [2.0 * np.random.rand(int((1.0-ratio)*self.num_sample_inout), 3) - 1.0, np.ones((int((1.0-ratio)*self.num_sample_inout), 1))],
+                [2.0 * np.random.rand(int(4.0*(1.0-ratio)*self.num_sample_inout), 3) - 1.0, np.ones((int(4.0*(1.0-ratio)*self.num_sample_inout), 1))],
                 1)  # [-1,1]
             random_points = np.matmul(random_points, inv(calib).T)[:, :3]
             # length = self.B_MAX - self.B_MIN

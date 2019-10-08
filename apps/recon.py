@@ -86,7 +86,7 @@ def reshape_sample_tensor(sample_tensor, num_views):
     )
     return sample_tensor
 
-def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=False, components=False):
+def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True, components=False):
     image_tensor = data['img'].to(device=cuda)
     calib_tensor = data['calib'].to(device=cuda)
 
@@ -104,7 +104,7 @@ def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=False, comp
         cv2.imwrite(save_img_path, save_img)
 
         verts, faces, _, _ = reconstruction(
-            net, cuda, calib_tensor, res, b_min, b_max, thresh, use_octree=use_octree, num_samples=10000)
+            net, cuda, calib_tensor, res, b_min, b_max, thresh, use_octree=use_octree, num_samples=100000)
         verts_tensor = torch.from_numpy(verts.T).unsqueeze(0).to(device=cuda).float()
         # if not components:
         #     net.calc_normal(verts_tensor, calib_tensor[:1])

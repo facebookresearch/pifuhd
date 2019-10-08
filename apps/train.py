@@ -67,7 +67,7 @@ def reshape_sample_tensor(sample_tensor, num_views):
     )
     return sample_tensor
 
-def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=False):
+def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True):
     image_tensor = data['img'].to(device=cuda)
     calib_tensor = data['calib'].to(device=cuda)
 
