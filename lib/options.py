@@ -78,6 +78,7 @@ class BaseOptions():
         g_model.add_argument('--netG', type=str, default='hgpifu', help='piximp | fanimp')
 
         # hgimp specific
+        g_model.add_argument('--n_pixshuffle', type=int, default=1, help='pixel shuffle')
         g_model.add_argument('--hg_use_attention', action='store_true', help='use self attention')
         g_model.add_argument('--num_stack', type=int, default=4, help='# of hourglass')
         g_model.add_argument('--hg_depth', type=int, default=2, help='# of stacked layer of hourglass')
