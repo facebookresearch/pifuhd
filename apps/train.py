@@ -269,7 +269,7 @@ def train(opt, writer):
     print('test data size: ', len(test_data_loader))
 
     ls_thresh = 0.5 # level set boundary
-    criteria = {'occ': nn.MSELoss()}
+    criteria = {}
     if opt.occ_loss_type == 'bce':
         criteria['occ'] = CustomBCELoss(False)
     elif opt.occ_loss_type == 'brock_bce':

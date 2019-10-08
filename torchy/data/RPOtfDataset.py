@@ -196,7 +196,7 @@ class RPOtfDataset(RPDataset):
             random.seed(1991)
             np.random.seed(1991)
         mesh = copy.deepcopy(g_mesh_dics[subject])
-        ratio = 0.6
+        ratio = 0.5
         if 'sigma' in self.opt.sampling_mode:
             surface_points, fid = trimesh.sample.sample_surface(mesh, int(4.0 * ratio * self.num_sample_inout))
             theta = 2.0 * math.pi * np.random.rand(surface_points.shape[0])
@@ -231,10 +231,11 @@ class RPOtfDataset(RPDataset):
                (ptsh[:, 1] <= 1) & (ptsh[:, 2] >= -1) & (ptsh[:, 2] <= 1)
 
         sample_points = sample_points[inbb]
+        sample_points = sample_points[:self.num_sample_inout]
         inside = mesh.contains(sample_points)
 
         if mask is not None:
-            ptsh = ptsh[inbb]
+            ptsh = ptsh[inbb][:self.num_sample_inout]
             x = (self.load_size * (0.5 * ptsh[:,0] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
             y = (self.load_size * (0.5 * ptsh[:,1] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
             idx = y * self.load_size + x
@@ -246,13 +247,12 @@ class RPOtfDataset(RPDataset):
 
         # total_size = sample_points.shape[0]
         # print(inside_points.shape[0]/total_size, outside_points.shape[0]/total_size)
-        nin = inside_points.shape[0]
-        inside_points = inside_points[
-                        :self.num_sample_inout // 2] if nin > self.num_sample_inout // 2 else inside_points
-        outside_points = outside_points[
-                         :self.num_sample_inout // 2] if nin > self.num_sample_inout // 2 else outside_points[
-                             :(self.num_sample_inout - nin)]    
-
+        # nin = inside_points.shape[0]
+        # inside_points = inside_points[
+        #                 :self.num_sample_inout // 2] if nin > self.num_sample_inout // 2 else inside_points
+        # outside_points = outside_points[
+        #                  :self.num_sample_inout // 2] if nin > self.num_sample_inout // 2 else outside_points[
+        #                      :(self.num_sample_inout - nin)]    
         samples = np.concatenate([inside_points, outside_points], 0).T # [3, N]
         labels = np.concatenate([np.ones((1, inside_points.shape[0])), np.zeros((1, outside_points.shape[0]))], 1)
 
