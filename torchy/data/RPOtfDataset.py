@@ -87,6 +87,20 @@ def load_trimesh(root, n_verts='100k', interval=0):
 
     return mesh_dics
 
+def sample_around_line(p1, p2, radius, n):
+    '''
+    args:
+        p1: [3] np.array
+        p2: [3] np.array
+        radius: sampling radius
+        n: # samples
+    return:
+        [n, 3] sampled points on the line segment
+    '''
+    pts = p1[None,:] + np.random.rand((n,1))*((p2-p1)[None,:])
+    disp = radius*(2.0*np.random.rand((n,3))-1.0)
+    return pts + disp 
+
 class RPOtfDataset(RPDataset):
     @staticmethod
     def modify_commandline_options(parser, is_train):
@@ -224,7 +238,16 @@ class RPOtfDataset(RPDataset):
             # length = self.B_MAX - self.B_MIN
             # random_points = np.random.rand(self.num_sample_inout // 4, 3) * length + self.B_MIN
             sample_points = np.concatenate([sample_points, random_points], 0)
-            np.random.shuffle(sample_points)
+        if 'arm' in self.opt.sampling_mode:
+            # 5-6, 6-7, 2-3, 3-4
+            arm_idx = [[5,6],[6,7],[2,3],[3,4]]
+            poses = self.poses[subject]
+            points = []
+            for idx in arm_idx:
+                points.append(sample_around_line(poses[idx[0]], poses[idx[1]], 20.0, self.num_sample_inout))
+            points.append(sample_points)
+            sample_points = np.concatenate(points, 0)
+        np.random.shuffle(sample_points)
 
         ptsh = np.matmul(np.concatenate([sample_points, np.ones((sample_points.shape[0],1))], 1), calib.T)[:, :3]
         inbb = (ptsh[:, 0] >= -1) & (ptsh[:, 0] <= 1) & (ptsh[:, 1] >= -1) & \
