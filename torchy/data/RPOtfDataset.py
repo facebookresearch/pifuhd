@@ -97,9 +97,19 @@ def sample_around_line(p1, p2, radius, n):
     return:
         [n, 3] sampled points on the line segment
     '''
-    pts = p1[None,:] + np.random.rand((n,1))*((p2-p1)[None,:])
-    disp = radius*(2.0*np.random.rand((n,3))-1.0)
-    return pts + disp 
+    p = np.stack([p1, p2],1)
+    p_max = p.max(1)
+    p_min = p.min(1)
+    p_min -= radius
+    p_max += radius
+    bbox_size = p_max - p_min
+    q = bbox_size[None,:] * np.random.rand(5*n,3) + p_min
+    l = ((p2-p1)**2).sum()
+    t = (np.matmul(q-p1[None,:],(p2 - p1)[:,None]) / l).clip(max=1.0, min=0.0)
+    p = p1[None,:] + t * ((p2-p1)[None,:])
+    mask = ((p-q)**2).sum(1) < radius * radius
+
+    return q[mask][:n]
 
 class RPOtfDataset(RPDataset):
     @staticmethod
@@ -244,7 +254,7 @@ class RPOtfDataset(RPDataset):
             poses = self.poses[subject]
             points = []
             for idx in arm_idx:
-                points.append(sample_around_line(poses[idx[0]], poses[idx[1]], 20.0, self.num_sample_inout))
+                points.append(sample_around_line(poses[idx[0]], poses[idx[1]], 20.0, 0.5*self.num_sample_inout))
             points.append(sample_points)
             sample_points = np.concatenate(points, 0)
         np.random.shuffle(sample_points)
@@ -280,6 +290,7 @@ class RPOtfDataset(RPDataset):
         labels = np.concatenate([np.ones((1, inside_points.shape[0])), np.zeros((1, outside_points.shape[0]))], 1)
 
         # save_samples_truncted_prob('test.ply', samples.T, labels.T)
+        # exit()
         # cv2.waitKey(0)
         samples = torch.Tensor(samples).float()
         labels = torch.Tensor(labels).float()

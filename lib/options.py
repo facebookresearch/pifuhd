@@ -30,7 +30,7 @@ class BaseOptions():
         g_train = parser.add_argument_group('Training')
         g_train.add_argument('--gpu_id', type=int, default=0, help='gpu id for cuda')
         g_train.add_argument('--batch_size', type=int, default=32, help='input batch size')
-        g_train.add_argument('--num_threads', default=4, type=int, help='# sthreads for loading data')
+        g_train.add_argument('--num_threads', default=1, type=int, help='# sthreads for loading data')
         g_train.add_argument('--serial_batches', action='store_true',
                              help='if true, takes images in order to make batches, otherwise takes them randomly')
         g_train.add_argument('--pin_memory', action='store_true', help='pin_memory')
