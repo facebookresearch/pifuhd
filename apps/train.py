@@ -22,7 +22,7 @@ from lib.sample_util import *
 from torchy.data import *
 from torchy.model import *
 from torchy.geometry import index
-from torchy.net_util import CustomBCELoss
+from torchy.net_util import CustomBCELoss, CustomMSELoss
 
 parser = BaseOptions()
 
@@ -105,7 +105,7 @@ def adjust_learning_rate(optimizer, epoch, lr, schedule, gamma):
             param_group['lr'] = lr
     return lr
 
-def linear_anneal_sigma(opt, cur_iter, n_iter, interval=10000):
+def linear_anneal_sigma(opt, cur_iter, n_iter, interval=40000):
     if cur_iter % interval == 0:
         if n_iter > 1:
             opt.sigma = (opt.sigma_min - opt.sigma_max) * cur_iter / float(n_iter - 1) + opt.sigma_max
@@ -275,7 +275,7 @@ def train(opt, writer):
     elif opt.occ_loss_type == 'brock_bce':
         criteria['occ'] = CustomBCELoss(True)
     elif opt.occ_loss_type == 'mse':
-        criteria['occ'] = nn.MSELoss()
+        criteria['occ'] = CustomMSELoss()
     else:
         raise NameError('unknown loss type %s' % opt.occ_loss_type)
 

@@ -48,7 +48,7 @@ class BaseOptions():
 
         # Testing related
         g_test = parser.add_argument_group('Testing')
-        g_test.add_argument('--resolution', type=int, default=256, help='# of grid in mesh reconstruction')
+        g_test.add_argument('--resolution', type=int, default=512, help='# of grid in mesh reconstruction')
         g_test.add_argument('--no_numel_eval', action='store_true', help='no numerical evaluation')
         g_test.add_argument('--no_mesh_recon', action='store_true', help='no mesh reconstruction')
 
@@ -87,10 +87,11 @@ class BaseOptions():
 
         # volumetric encoder
         g_model.add_argument('--sp_no_pifu', action='store_true', help='cut fcn feature for debug')
-        g_model.add_argument('--sp_enc_type', type=str, default='z', help='spatial encoding [ z | vol_enc ]')
+        g_model.add_argument('--sp_enc_type', type=str, default='z', help='spatial encoding [ z | vol ]')
         g_model.add_argument('--vol_net', type=str, default='unet', help='[ unet | hg ]')
         g_model.add_argument('--vol_norm', type=str, default='batch', help='normalization for volume branch')
-        g_model.add_argument('--vol_ch', type=int, default=16, help='channel size for volume branch')
+        g_model.add_argument('--vol_ch_in', type=int, default=16, help='channel size for volume branch')
+        g_model.add_argument('--vol_ch_out', type=int, default=16, help='channel size for volume branch')
         g_model.add_argument('--vol_hg_depth', type=int, default=2, help='depth of hourglass in volume branch')
 
         # Classification General
@@ -185,19 +186,19 @@ class BaseOptions():
         if len(opt.mlp_res_layers) == 1 and opt.mlp_res_layers[0] < 1:
             opt.mlp_res_layers = []
 
-        if opt.sp_enc_type == 'vol_enc':
-            opt.name = '%s_vol_hg.%s.%d.%d.%d_vc.%s.%d_wbg%d_s%1.f.%1.f' % \
+        if opt.sp_enc_type == 'vol':
+            opt.name = '%s_img.hg.%s.%d.%d.%d_vol.%s.%s.%d-%d_wbg%d_s%1.f.%1.f' % \
                 (opt.name, opt.norm, opt.num_stack, opt.hg_depth, opt.hg_dim, \
-                opt.vol_norm, opt.vol_ch, int(opt.random_bg), opt.sigma_min, opt.sigma_max)
-            opt.mlp_dim = [opt.vol_ch if opt.sp_no_pifu else opt.vol_ch + opt.hg_dim] + opt.mlp_dim
+                opt.vol_net, opt.vol_norm, opt.vol_ch_in, opt.vol_ch_out, int(opt.random_bg), opt.sigma_min, opt.sigma_max)
+            opt.mlp_dim = [opt.vol_ch_out if opt.sp_no_pifu else opt.vol_ch_out + opt.hg_dim] + opt.mlp_dim
         else:
-            opt.name = '%s_z_hg.%s.%d.%d.%d_wbg%d_s%1.f.%1.f' % \
+            opt.name = '%s_img.hg.%s.%d.%d.%d_wbg%d_s%1.f.%1.f' % \
                 (opt.name, opt.norm, opt.num_stack, opt.hg_depth, opt.hg_dim, \
                  int(opt.random_bg), opt.sigma_min, opt.sigma_max)
             opt.mlp_dim = [opt.hg_dim + 1] + opt.mlp_dim
         
         # deprecated(09/25)
-        # if opt.sp_enc_type == 'vol_enc':
+        # if opt.sp_enc_type == 'vol':
         #     opt.name = '%s_p%d.%d_%s%d_np%d_s%1.f.%1.f' % (opt.name, opt.mean_pitch, opt.max_pitch, opt.vol_net, opt.vol_ch, int(opt.sp_no_pifu), opt.sigma_min, opt.sigma_max)
         #     opt.mlp_dim = [opt.vol_ch if opt.sp_no_pifu else opt.vol_ch + opt.hg_dim] + opt.mlp_dim
         # else:

@@ -196,7 +196,7 @@ class RPOtfDataset(RPDataset):
             random.seed(1991)
             np.random.seed(1991)
         mesh = copy.deepcopy(g_mesh_dics[subject])
-        ratio = 0.5
+        ratio = 0.8
         if 'sigma' in self.opt.sampling_mode:
             surface_points, fid = trimesh.sample.sample_surface(mesh, int(4.0 * ratio * self.num_sample_inout))
             theta = 2.0 * math.pi * np.random.rand(surface_points.shape[0])

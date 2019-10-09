@@ -36,7 +36,7 @@ class HGPIFuNet(BasePIFuNet):
             last_op=nn.Sigmoid(),
             compose=self.opt.use_compose)
 
-        if self.opt.sp_enc_type == 'vol_enc':
+        if self.opt.sp_enc_type == 'vol':
             self.spatial_enc = VolumetricEncoder(opt)
         elif self.opt.sp_enc_type == 'z':
             self.spatial_enc = DepthNormalizer(opt)
@@ -58,7 +58,7 @@ class HGPIFuNet(BasePIFuNet):
         args:
             images: [B, C, H, W]
         '''
-        if self.opt.sp_enc_type == 'vol_enc':
+        if self.opt.sp_enc_type == 'vol':
             self.spatial_enc.filter(images)
 
         self.im_feat_list, self.normx = self.image_filter(images)
@@ -95,7 +95,7 @@ class HGPIFuNet(BasePIFuNet):
 
         for i, im_feat in enumerate(self.im_feat_list):
 
-            if self.opt.sp_enc_type == 'vol_enc' and self.opt.sp_no_pifu:
+            if self.opt.sp_enc_type == 'vol' and self.opt.sp_no_pifu:
                 point_local_feat = sp_feat
             else:
                 point_local_feat_list = [self.index(im_feat, xy), sp_feat]            
@@ -135,7 +135,7 @@ class HGPIFuNet(BasePIFuNet):
         im_feat = self.im_feat_list[-1]
         sp_feat = self.spatial_enc(xyz, calibs=calibs)
 
-        if self.opt.sp_enc_type == 'vol_enc' and self.opt.sp_no_pifu:
+        if self.opt.sp_enc_type == 'vol' and self.opt.sp_no_pifu:
             point_local_feat = sp_feat
         else:
             point_local_feat_list = [self.index(im_feat, xy), sp_feat]            
