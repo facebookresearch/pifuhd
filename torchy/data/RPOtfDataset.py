@@ -87,7 +87,7 @@ def load_trimesh(root, n_verts='100k', interval=0):
 
     return mesh_dics
 
-def sample_around_line(p1, p2, radius, n):
+def sample_around_linesegment(p1, p2, radius, n):
     '''
     args:
         p1: [3] np.array
@@ -107,9 +107,23 @@ def sample_around_line(p1, p2, radius, n):
     l = ((p2-p1)**2).sum()
     t = (np.matmul(q-p1[None,:],(p2 - p1)[:,None]) / l).clip(max=1.0, min=0.0)
     p = p1[None,:] + t * ((p2-p1)[None,:])
-    mask = ((p-q)**2).sum(1) < radius * radius
+    mask = ((p-q)**2).sum(1) <= radius * radius
 
     return q[mask][:n]
+
+def sample_around_point(p, radius, n):
+    '''
+    args:
+        p: [3] np.array
+        radius: sampling radius
+        n: # samples
+    return:
+        [n, 3]: sampling points around p
+    '''
+    disp = (2.0 * np.random.rand(2*n,3) - 1.0)
+    disp = disp[(disp**2).sum(1) <= 1.0][:n]
+
+    return radius * disp + p[None,:]
 
 class RPOtfDataset(RPDataset):
     @staticmethod
@@ -220,6 +234,8 @@ class RPOtfDataset(RPDataset):
             random.seed(1991)
             np.random.seed(1991)
         mesh = copy.deepcopy(g_mesh_dics[subject])
+        poses = self.poses[subject]
+
         ratio = 0.8
         if 'sigma' in self.opt.sampling_mode:
             surface_points, fid = trimesh.sample.sample_surface(mesh, int(4.0 * ratio * self.num_sample_inout))
@@ -251,12 +267,14 @@ class RPOtfDataset(RPDataset):
         if 'arm' in self.opt.sampling_mode:
             # 5-6, 6-7, 2-3, 3-4
             arm_idx = [[5,6],[6,7],[2,3],[3,4]]
-            poses = self.poses[subject]
             points = []
             for idx in arm_idx:
-                points.append(sample_around_line(poses[idx[0]], poses[idx[1]], 20.0, 0.5*self.num_sample_inout))
+                points.append(sample_around_linesegment(poses[idx[0]], poses[idx[1]], 20.0, self.num_sample_inout//4))
             points.append(sample_points)
             sample_points = np.concatenate(points, 0)
+        if 'face' in self.opt.sampling_mode:
+            points = sample_around_point(poses[0], 10.0, self.num_sample_inout//8)
+            sample_points = np.concatenate([sample_points, points], 0)
         np.random.shuffle(sample_points)
 
         ptsh = np.matmul(np.concatenate([sample_points, np.ones((sample_points.shape[0],1))], 1), calib.T)[:, :3]
