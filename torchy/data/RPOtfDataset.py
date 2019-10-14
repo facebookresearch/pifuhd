@@ -87,7 +87,7 @@ def load_trimesh(root, n_verts='100k', interval=0):
 
     return mesh_dics
 
-def sample_around_linesegment(p1, p2, radius, n):
+def sample_around_linesegment(p1, p2, radius, n, tmin=0.0, tmax=1.0):
     '''
     args:
         p1: [3] np.array
@@ -105,7 +105,7 @@ def sample_around_linesegment(p1, p2, radius, n):
     bbox_size = p_max - p_min
     q = bbox_size[None,:] * np.random.rand(5*n,3) + p_min
     l = ((p2-p1)**2).sum()
-    t = (np.matmul(q-p1[None,:],(p2 - p1)[:,None]) / l).clip(max=1.0, min=0.0)
+    t = (np.matmul(q-p1[None,:],(p2 - p1)[:,None]) / l).clip(max=tmax, min=tmin)
     p = p1[None,:] + t * ((p2-p1)[None,:])
     mask = ((p-q)**2).sum(1) <= radius * radius
 
@@ -247,6 +247,27 @@ class RPOtfDataset(RPDataset):
             dir = np.stack([x,y,z],1)
             radius = np.random.normal(scale=self.opt.sigma if self.is_train else 3.0, size=[surface_points.shape[0],1])
             sample_points = surface_points + radius * dir
+        if 'arm' in self.opt.sampling_mode:
+            # 5-6, 6-7, 2-3, 3-4
+            arm_idx = [[5,6,0.0,1.0],[6,7,0.0,1.2],[2,3,0.0,1.0],[3,4,0.0,1.2]]
+            points = []
+            for idx in arm_idx:
+                points.append(sample_around_linesegment(poses[idx[0]], poses[idx[1]], 20.0, self.num_sample_inout//2, idx[2], idx[3]))
+            points.append(sample_points)
+            sample_points = np.concatenate(points, 0)
+        if 'face' in self.opt.sampling_mode:
+            points = sample_around_point(poses[0], 10.0, self.num_sample_inout//4)
+            sample_points = np.concatenate([sample_points, points], 0)
+        if mask is not None and 'mask' in self.opt.sampling_mode:
+            ptsh = np.matmul(np.concatenate([sample_points, np.ones((sample_points.shape[0],1))], 1), calib.T)[:, :3]
+            x = (self.load_size * (0.5 * ptsh[:,0] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
+            y = (self.load_size * (0.5 * ptsh[:,1] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
+            idx = y * self.load_size + x
+            inmask = mask.reshape(-1)[idx] > 0
+            points_inmask = sample_points[inmask]
+            points_outmask = sample_points[np.logical_not(inmask)]
+            out_idxs = np.random.randint(0,points_outmask.shape[0],size=(points_outmask.shape[0]//8))
+            sample_points = np.concatenate([points_inmask, points_outmask[out_idxs]], 0)
         if self.opt.sampling_mode == 'uniform':
             # add random points within image space
             random_points = np.concatenate(
@@ -264,17 +285,6 @@ class RPOtfDataset(RPDataset):
             # length = self.B_MAX - self.B_MIN
             # random_points = np.random.rand(self.num_sample_inout // 4, 3) * length + self.B_MIN
             sample_points = np.concatenate([sample_points, random_points], 0)
-        if 'arm' in self.opt.sampling_mode:
-            # 5-6, 6-7, 2-3, 3-4
-            arm_idx = [[5,6],[6,7],[2,3],[3,4]]
-            points = []
-            for idx in arm_idx:
-                points.append(sample_around_linesegment(poses[idx[0]], poses[idx[1]], 20.0, self.num_sample_inout//4))
-            points.append(sample_points)
-            sample_points = np.concatenate(points, 0)
-        if 'face' in self.opt.sampling_mode:
-            points = sample_around_point(poses[0], 10.0, self.num_sample_inout//8)
-            sample_points = np.concatenate([sample_points, points], 0)
         np.random.shuffle(sample_points)
 
         ptsh = np.matmul(np.concatenate([sample_points, np.ones((sample_points.shape[0],1))], 1), calib.T)[:, :3]

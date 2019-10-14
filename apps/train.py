@@ -271,11 +271,11 @@ def train(opt, writer):
     ls_thresh = 0.5 # level set boundary
     criteria = {}
     if opt.occ_loss_type == 'bce':
-        criteria['occ'] = CustomBCELoss(False)
+        criteria['occ'] = CustomBCELoss(opt.occ_gamma, False)
     elif opt.occ_loss_type == 'brock_bce':
-        criteria['occ'] = CustomBCELoss(True)
+        criteria['occ'] = CustomBCELoss(opt.occ_gamma, True)
     elif opt.occ_loss_type == 'mse':
-        criteria['occ'] = CustomMSELoss()
+        criteria['occ'] = CustomMSELoss(opt.occ_gamma)
     else:
         raise NameError('unknown loss type %s' % opt.occ_loss_type)
 

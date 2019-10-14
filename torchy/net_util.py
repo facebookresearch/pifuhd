@@ -67,28 +67,30 @@ def get_norm_layer(norm_type='instance'):
     return norm_layer
 
 class CustomBCELoss(nn.Module):
-    def __init__(self, brock=False):
+    def __init__(self, gamma=0.8, brock=False):
         super(CustomBCELoss, self).__init__()
         self.brock = brock
+        self.gamma = gamma
 
-    def forward(self, pred, gt, ratio=0.8):
+    def forward(self, pred, gt):
         x_hat = torch.clamp(pred, 1e-5, 1.0-1e-5) # prevent log(0) from happening
         if self.brock:
             x = 3.0*gt - 1.0 # rescaled to [-1,2]
 
-            loss = -(ratio*x*torch.log(x_hat) + (1.0-ratio)*(1.0-x)*torch.log(1.0-x_hat))
+            loss = -(self.gamma*x*torch.log(x_hat) + (1.0-self.gamma)*(1.0-x)*torch.log(1.0-x_hat))
         else:
-            loss = -(ratio*gt*torch.log(x_hat) + (1.0-ratio)*(1.0-gt)*torch.log(1.0-x_hat))
+            loss = -(self.gamma*gt*torch.log(x_hat) + (1.0-self.gamma)*(1.0-gt)*torch.log(1.0-x_hat))
 
         return loss.mean()
 
 class CustomMSELoss(nn.Module):
-    def __init__(self):
+    def __init__(self, gamma=0.8):
         super(CustomMSELoss, self).__init__()
+        self.gamma = gamma
 
-    def forward(self, pred, gt, ratio=0.8):
+    def forward(self, pred, gt):
 
-        weight = ratio * gt + (1.0-ratio) * (1 - gt)
+        weight = self.gamma * gt + (1.0-self.gamma) * (1 - gt)
         loss = (weight * (pred - gt).pow(2)).mean()
 
         return loss.mean()

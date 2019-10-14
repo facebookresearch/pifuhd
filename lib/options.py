@@ -95,6 +95,7 @@ class BaseOptions():
         g_model.add_argument('--vol_hg_depth', type=int, default=2, help='depth of hourglass in volume branch')
 
         # Classification General
+        g_model.add_argument('--imfeat_norm', action='store_true', help='image feature normalization')
         g_model.add_argument('--mlp_dim', nargs='+', default=[1024, 512, 256, 128, 1], type=int,
                              help='# of dimensions of mlp. no need to put the first channel')
         g_model.add_argument('--mlp_res_layers', nargs='+', default=[2,3,4], type=int,
@@ -116,6 +117,7 @@ class BaseOptions():
         parser.add_argument('--lambda_cmp_l1', type=float, default=0.0, help='weight of normal loss')
         parser.add_argument('--occ_loss_type', type=str, default='mse', help='bce | brock_bce | mse')
         parser.add_argument('--nml_loss_type', type=str, default='mse', help='mse | l1')
+        parser.add_argument('--occ_gamma', type=float, default=0.8, help='weighting term')
         parser.add_argument('--no_finetune', action='store_true', help='fine tuning netG in training C')
 
         # for eval
