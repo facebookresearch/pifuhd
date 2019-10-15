@@ -29,11 +29,11 @@ parser = argparse.ArgumentParser('PIFlow train')
 parser.add_argument('--checkpoint', type=str)
 parser.add_argument('--dataroot', type=str)
 parser.add_argument('--loadSize', type=int, default=512)
-parser.add_argument('--batch_time', type=int, default=2)
-parser.add_argument('--num_sample_inout', type=int, default=1000)
-parser.add_argument('--sigma', type=float, default=0.05)
+parser.add_argument('--batch_time', type=int, default=1)
+parser.add_argument('--num_sample_inout', type=int, default=10000)
+parser.add_argument('--sigma', type=float, default=0.03)
 parser.add_argument('--batch_size', type=int, default=20)
-parser.add_argument('--n_epoch', type=int, default=100)
+parser.add_argument('--n_epoch', type=int, default=200)
 parser.add_argument('--n_threads', type=int, default=10)
 args = parser.parse_args()
 
@@ -48,7 +48,7 @@ class VideoDataset(Dataset):
 
         self.root = self.opt.dataroot
         self.img_files = sorted([os.path.join(self.root,f) for f in os.listdir(self.root) if '.png' in f])
-        self.img_files = self.img_files[:30]
+        #self.img_files = self.img_files[:30]
         self.IMG = os.path.join(self.root)
 
         self.phase = 'train'
@@ -144,7 +144,7 @@ class VideoDataset(Dataset):
         image = Image.open(img_path).convert('RGB')
         image = self.to_tensor(image)
         
-        t = float(index)/len(self.img_files)
+        t = float(index)/(len(self.img_files)-1.0)
         return {
             'img': image,
             'time': torch.Tensor([t]),
@@ -173,6 +173,20 @@ class PIFlow(nn.Module):
             return self.net(torch.cat([y, t[None,:,None].expand_as(y[:,:1,:])],1))
         else:
             return self.net(torch.cat([y, t[None,None,None].expand_as(y[:,:1,:])],1))            
+
+class PIFlowOneGo(nn.Module):
+    def __init__(self):
+        super(PIFlowOneGo, self).__init__()
+
+        filter_channels = [4, 512, 512, 512, 512, 512, 3]
+        self.net = MLP(filter_channels, res_layers=[1,2,3,4,5], last_op=nn.Tanh())
+
+    def forward(self, t, y):
+        y_ori = y
+        y = y[None].expand(t.size(0),-1,-1,-1)
+        t = t[:,None,None].expand_as(y[:,:,:1])
+        y = torch.cat([y, t], 2).view(-1,4,y.size(3))
+        return self.net(y) + y_ori
 
 if __name__ == '__main__':
     # load checkpoints
@@ -214,7 +228,9 @@ if __name__ == '__main__':
         else: # this is deprecated but keep it for now.
             netG.load_state_dict(state_dict)
 
-    flow = PIFlow().to(cuda)
+    flow = PIFlowOneGo().to(cuda)
+    # flow = PIFlowSingle().to(cuda)
+    # flow = PIFlow().to(cuda)
     optimizer = optim.Adam(flow.parameters(), lr=1e-3)
 
     # train flow network
@@ -237,27 +253,35 @@ if __name__ == '__main__':
             image_tensor = torch.cat([image_src_tensor, image_time_tensor], 0)
             netG.filter(image_tensor)
             
-            pos_tensor = odeint(flow, sample_tensor, time_tensor, rtol=1e-3, atol=1e-5) # returns (Bt, Bs, C, N)
+            # pos_tensor = odeint(flow, sample_tensor, time_tensor, rtol=1e-3, atol=1e-5) # returns (Bt, Bs, C, N)
 
-            pos_tensor = pos_tensor[1:].view(-1, *pos_tensor.size()[2:])
+            # pos_tensor = pos_tensor[1:].view(-1, *pos_tensor.size()[2:])
+            # pos_tensor = flow(sample_tensor)
+            pos_tensor = flow(time_tensor[1:], sample_tensor)
             pos_tensor = torch.cat([sample_tensor, pos_tensor], 0)
             netG.query(pos_tensor, calib_tensor.expand(pos_tensor.size(0),-1,-1))
 
             preds = netG.get_preds()
-            loss = nn.MSELoss()(preds[1:], preds[:1].expand_as(preds[1:]).detach())
+            loss = nn.L1Loss()(preds[1:], (preds[:1].expand_as(preds[1:] > 0.5).float()).detach())
             loss.backward()
             optimizer.step()
 
             loss_hist.append(loss.item())
 
         print('epoch %d loss: %.4f' % (epoch, np.average(loss_hist)))
-
-    mesh_data = dataset.get_start_mesh()
-    sample_tensor = mesh_data['vertices'][None].to(device=cuda)
-    calib_tensor = mesh_data['calib'][None].to(device=cuda)
-    time_tensor = torch.Tensor([0,0.5,1.0]).to(device=cuda)
-    pos_tensor = odeint(flow, sample_tensor, time_tensor)
-    vertices = pos_tensor[1,0].t().detach().cpu().numpy()
-    save_obj_mesh('test1.obj', vertices, mesh_data['faces'][:,::-1])
-    vertices = pos_tensor[2,0].t().detach().cpu().numpy()
-    save_obj_mesh('test2.obj', vertices, mesh_data['faces'][:,::-1])
+    
+        if epoch % 50 == 0:
+            with torch.no_grad():
+                mesh_data = dataset.get_start_mesh()
+                sample_tensor = mesh_data['vertices'][None].to(device=cuda)
+                calib_tensor = mesh_data['calib'][None].to(device=cuda)
+                # pos_tensor = flow(sample_tensor)
+                # vertices = pos_tensor[0].t().detach().cpu().numpy()
+                # save_obj_mesh('test2.obj', vertices, mesh_data['faces'][:,::-1])
+                
+                time_tensor = torch.linspace(0.0, 1.0, 5)[:,None].to(device=cuda)
+                pos_tensor = flow(time_tensor, sample_tensor)
+                # pos_tensor = odeint(flow, sample_tensor, time_tensor)
+                for i in range(5):
+                    vertices = pos_tensor[i].t().detach().cpu().numpy()
+                    save_obj_mesh('test%d.obj' % i, vertices, mesh_data['faces'][:,::-1])
