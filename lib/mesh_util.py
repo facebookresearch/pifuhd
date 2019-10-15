@@ -53,14 +53,17 @@ def reconstruction(net, cuda, calib_tensor,
         return -1
 
 
-def save_obj_mesh(mesh_path, verts, faces):
+def save_obj_mesh(mesh_path, verts, faces=None):
     file = open(mesh_path, 'w')
 
     for v in verts:
         file.write('v %.4f %.4f %.4f\n' % (v[0], v[1], v[2]))
-    for f in faces:
-        f_plus = f + 1
-        file.write('f %d %d %d\n' % (f_plus[0], f_plus[2], f_plus[1]))
+    if faces is not None:
+        for f in faces:
+            if f[0] == f[1] or f[1] == f[2] or f[0] == f[2]:
+                continue
+            f_plus = f + 1
+            file.write('f %d %d %d\n' % (f_plus[0], f_plus[2], f_plus[1]))
     file.close()
 
 

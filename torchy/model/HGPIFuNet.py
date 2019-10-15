@@ -97,9 +97,9 @@ class HGPIFuNet(BasePIFuNet):
 
             if self.opt.sp_enc_type == 'vol' and self.opt.sp_no_pifu:
                 point_local_feat = sp_feat
-            elif self.opt.imfeat_norm: # experimental
-                point_local_feat_list = [F.normalize(self.index(im_feat, xy),dim=1,eps=1e-8), sp_feat]            
-                point_local_feat = torch.cat(point_local_feat_list, 1)
+            # elif self.opt.imfeat_norm: # experimental
+            #     point_local_feat_list = [F.normalize(self.index(im_feat, xy),dim=1,eps=1e-8), sp_feat]            
+            #     point_local_feat = torch.cat(point_local_feat_list, 1)
             else:
                 point_local_feat_list = [self.index(im_feat, xy), sp_feat]            
                 point_local_feat = torch.cat(point_local_feat_list, 1)
@@ -140,9 +140,9 @@ class HGPIFuNet(BasePIFuNet):
 
         if self.opt.sp_enc_type == 'vol' and self.opt.sp_no_pifu:
             point_local_feat = sp_feat
-        elif self.opt.imfeat_norm: # experimental
-            point_local_feat_list = [F.normalize(self.index(im_feat, xy),dim=1,eps=1e-8), sp_feat]            
-            point_local_feat = torch.cat(point_local_feat_list, 1)
+        # elif self.opt.imfeat_norm: # experimental
+        #     point_local_feat_list = [F.normalize(self.index(im_feat, xy),dim=1,eps=1e-8), sp_feat]            
+        #     point_local_feat = torch.cat(point_local_feat_list, 1)
         else:
             point_local_feat_list = [self.index(im_feat, xy), sp_feat]            
             point_local_feat = torch.cat(point_local_feat_list, 1)

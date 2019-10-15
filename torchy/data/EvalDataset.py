@@ -21,7 +21,7 @@ class EvalDataset(Dataset):
         self.projection_mode = projection
 
         self.root = self.opt.dataroot
-        self.img_files = [os.path.join(self.root,f) for f in os.listdir(self.root) if '.png' in f]
+        self.img_files = sorted([os.path.join(self.root,f) for f in os.listdir(self.root) if '.png' in f])
         self.IMG = os.path.join(self.root)
 
         self.phase = 'val'
