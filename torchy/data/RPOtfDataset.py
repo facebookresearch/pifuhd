@@ -21,7 +21,8 @@ from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 
 from tqdm import tqdm
-from .RPDataset import RPDataset
+# from .RPDataset import RPDataset
+from .RPDatasetParts import RPDatasetParts as RPDataset
 from lib.sample_util import *
 
 import gc
