@@ -393,11 +393,10 @@ class RPDatasetParts(Dataset):
             'mask': torch.stack(mask_list, dim=0)
         }
 
-    def select_sampling_method(self, subject, calib):
-        mode = self.opt.sampling_mode if self.is_train else 'uniform_10k'
-        return self.load_points_sample(subject, mode)
+    def select_sampling_method(self, subject, calib, mask=None):
+        return self.load_points_sample(subject, calib, mask)
     
-    def load_points_sample(self, subject, mode, num_samples=0, num_files=100):
+    def load_points_sample(self, subject, calib, mask, num_files=100):
         '''
         load points from precomputed numpy array
         inside/outside points are stored with %05d.in.xyz and %05d.ou.xyz 
@@ -408,26 +407,34 @@ class RPDatasetParts(Dataset):
             'samples': [3, N]
             'labels': [1, N]
         '''
-        SAMPLE_DIR = os.path.join(self.SAMPLE, mode, subject)
+        SAMPLE_DIR = os.path.join(self.SAMPLE, subject)
 
         rand_idx = np.random.randint(num_files)
-        inside_file = os.path.join(SAMPLE_DIR, '%05d.in.xyz' % rand_idx)
-        rand_idx = np.random.randint(num_files)
-        outside_file = os.path.join(SAMPLE_DIR, '%05d.ou.xyz' % rand_idx)
+        pts = np.load(os.path.join(SAMPLE_DIR, 'sdf%04d.npy' % rand_idx))
 
-        in_pts = np.load(inside_file)
-        out_pts = np.load(outside_file)
+        ptsh = np.matmul(np.concatenate([pts[:,:3], np.ones((pts.shape[0],1))], 1), calib.T)[:, :3]
+        inbb = (ptsh[:, 0] >= -1) & (ptsh[:, 0] <= 1) & (ptsh[:, 1] >= -1) & \
+               (ptsh[:, 1] <= 1) & (ptsh[:, 2] >= -1) & (ptsh[:, 2] <= 1)
+        pts = pts[inbb]
+        ptsh = ptsh[inbb]
+        if mask is not None:
+            x = (self.load_size * (0.5 * ptsh[:,0] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
+            y = (self.load_size * (0.5 * ptsh[:,1] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
+            idx = y * self.load_size + x
+            prob_mask = self.opt.mask_ratio * mask.reshape(-1)[idx] + (1.0 - self.opt.mask_ratio)
 
-        if num_samples <= 0:
-            num_samples = self.num_sample_inout
-        rand_indices = np.random.randint(len(in_pts), size=num_samples // 2)
-        in_pts = in_pts[rand_indices]
+        prob = np.random.rand(pts.shape[0]) * prob_mask * np.exp(-((pts[:,3]*20.0)**2)/(2.0*self.opt.sigma*self.opt.sigma))
+        idx = np.argpartition(prob, -self.num_sample_inout)
 
-        rand_indices = np.random.randint(len(out_pts), size=num_samples // 2)
-        out_pts = out_pts[rand_indices]
+        pts = pts[idx[-self.num_sample_inout:]]
+
+        in_mask = (pts[:,3] <= 0)
+        in_pts = pts[in_mask]
+        out_pts = pts[in_mask]
 
         samples = np.concatenate([in_pts, out_pts], 0)
         labels = np.concatenate([np.ones((in_pts.shape[0], 1)), np.zeros((out_pts.shape[0], 1))], 0)    
+        ratio = float(in_pts.shape[0])/float(out_pts.shape[0])
 
         samples = torch.Tensor(samples.T).float()
         labels = torch.Tensor(labels.T).float()
@@ -435,6 +442,7 @@ class RPDatasetParts(Dataset):
         return {
             'samples': samples,
             'labels': labels,
+            'ratio': ratio
         }
 
     def get_normal_sampling(self, subject):
