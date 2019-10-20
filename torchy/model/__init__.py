@@ -1,4 +1,4 @@
-from .MLP import MLP
+from .MLP import MLP, MLPResBlock
 from .BasePIFuNet import BasePIFuNet
 from .HGPIFuNet import HGPIFuNet
 from .ResBlkPIFuNet import ResBlkPIFuNet

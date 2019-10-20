@@ -67,3 +67,56 @@ class MLP(nn.Module):
             y = y.max(dim=1, keepdim=True)[0]
 
         return y
+
+class ResBlock(nn.Module):
+    def __init__(self, in_ch):
+        super(ResBlock, self).__init__()
+
+        self.conv1 = nn.Conv1d(in_ch, in_ch, 1)
+        self.conv2 = nn.Conv1d(in_ch, in_ch, 1)
+        self.conv3 = nn.Conv1d(in_ch, in_ch, 1)
+
+    def forward(self, y):
+        tmp_y = y
+        y = self.conv1(F.relu(y))
+        y = self.conv2(F.relu(y))
+
+        return self.conv3(y + tmp_y)
+
+class MLPResBlock(nn.Module):
+    def __init__(self, 
+                 in_ch, 
+                 out_ch,
+                 n_block, 
+                 last_op=None):
+        super(MLPResBlock, self).__init__()
+
+        self.last_op = last_op
+
+        self.filters = nn.ModuleList()
+        for i in range(n_block):
+            self.filters.append(ResBlock(512))
+        
+        self.conv1 = nn.Conv1d(in_ch, 512, 1)
+        self.conv_last = nn.Conv1d(512, out_ch, 1)
+
+    def forward(self, feature):
+        '''
+        feature may include multiple view inputs
+        args:
+            feature: [B, C_in, N]
+        return:
+            [B, C_out, N] prediction
+        '''
+        y = feature
+        y = self.conv1(y)
+
+        for f in self.filters:
+            y = f(y)
+
+        y = self.conv_last(F.relu(y))
+
+        if self.last_op is not None:
+            y = self.last_op(y)
+
+        return y
