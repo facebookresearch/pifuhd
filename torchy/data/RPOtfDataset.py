@@ -237,6 +237,7 @@ class RPOtfDataset(RPDataset):
         mesh = copy.deepcopy(g_mesh_dics[subject])
         poses = self.poses[subject]
 
+        print(calib)
         ratio = 0.8
         if 'sigma' in self.opt.sampling_mode:
             surface_points, fid = trimesh.sample.sample_surface(mesh, int(4.0 * ratio * self.num_sample_inout))

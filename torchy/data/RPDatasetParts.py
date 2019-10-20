@@ -421,14 +421,15 @@ class RPDatasetParts(Dataset):
             x = (self.load_size * (0.5 * ptsh[:,0] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
             y = (self.load_size * (0.5 * ptsh[:,1] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
             idx = y * self.load_size + x
-            prob_mask = self.opt.mask_ratio * mask.reshape(-1)[idx] + (1.0 - self.opt.mask_ratio)
+            mask = mask.reshape(-1)[idx]
+            prob_mask = self.opt.mask_ratio * mask + (1.0 - self.opt.mask_ratio)
 
         prob = np.random.rand(pts.shape[0]) * prob_mask * np.exp(-((pts[:,3]*20.0)**2)/(2.0*self.opt.sigma*self.opt.sigma))
-        idx = np.argpartition(prob, -self.num_sample_inout)
+        idx = np.argpartition(prob, -self.num_sample_inout)[-self.num_sample_inout:]
 
-        pts = pts[idx[-self.num_sample_inout:]]
-
-        in_mask = (pts[:,3] <= 0)
+        pts = pts[idx]
+        mask = mask[idx] > 0.0
+        in_mask = (pts[:,3] <= 0) & mask
         in_pts = pts[in_mask]
         out_pts = pts[in_mask]
 
