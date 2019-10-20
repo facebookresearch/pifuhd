@@ -31,14 +31,14 @@ def train(opt):
     #     dataset = RPOtfDataset(opt, phase='train')
     # else:
     #     dataset = RPDataset(opt, phase='train')
+    dataset[0]
+    # data_loader = DataLoader(dataset,
+    #                                batch_size=opt.batch_size, shuffle=not opt.serial_batches,
+    #                                num_workers=opt.num_threads, pin_memory=opt.pin_memory)
+    # print('data size: ', len(data_loader))
 
-    data_loader = DataLoader(dataset,
-                                   batch_size=opt.batch_size, shuffle=not opt.serial_batches,
-                                   num_workers=opt.num_threads, pin_memory=opt.pin_memory)
-    print('data size: ', len(data_loader))
-
-    for train_idx, data in enumerate(data_loader):
-        pass
+    # for train_idx, data in enumerate(data_loader):
+    #     pass
 
 def trainerWrapper(args=None):
     opt = parser.parse(args)

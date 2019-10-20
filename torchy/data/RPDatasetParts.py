@@ -13,6 +13,8 @@ import torch
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 
+from lib.sample_util import *
+
 def loadPoses(root, subjects):
     dic = {}
     for sub in subjects:
@@ -416,26 +418,35 @@ class RPDatasetParts(Dataset):
         inbb = (ptsh[:, 0] >= -1) & (ptsh[:, 0] <= 1) & (ptsh[:, 1] >= -1) & \
                (ptsh[:, 1] <= 1) & (ptsh[:, 2] >= -1) & (ptsh[:, 2] <= 1)
         pts = pts[inbb]
-        ptsh = ptsh[inbb]
+
+        prob = np.random.rand(pts.shape[0]) * np.exp(-((pts[:,3]*20.0)**2)/(2.0*self.opt.sigma*self.opt.sigma))
+        idx = np.argpartition(prob, -2*self.num_sample_inout)[-2*self.num_sample_inout:]
+
+        pts = pts[idx]
+        ptsh = np.matmul(np.concatenate([pts[:,:3], np.ones((pts.shape[0],1))], 1), calib.T)[:, :3]
         if mask is not None:
             x = (self.load_size * (0.5 * ptsh[:,0] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
             y = (self.load_size * (0.5 * ptsh[:,1] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
             idx = y * self.load_size + x
-            mask = mask.reshape(-1)[idx]
-            prob_mask = self.opt.mask_ratio * mask + (1.0 - self.opt.mask_ratio)
+            inmask = mask.reshape(-1)[idx] > 0.0
+            pts_inmask = pts[inmask]
+            pts_outmask = pts[np.logical_not(inmask)]
+            pts_outmask = pts_outmask[:int(self.opt.mask_ratio*pts_outmask.shape[0])]
+            pts_outmask[:,3] = 1.0 # points out of mask are treated as points outside
+            pts = np.concatenate([pts_inmask, pts_outmask], 0)
+            pts = pts[np.random.permutation(np.arange(0,pts.shape[0]))[:self.opt.num_sample_inout]]
 
-        prob = np.random.rand(pts.shape[0]) * prob_mask * np.exp(-((pts[:,3]*20.0)**2)/(2.0*self.opt.sigma*self.opt.sigma))
-        idx = np.argpartition(prob, -self.num_sample_inout)[-self.num_sample_inout:]
-
-        pts = pts[idx]
-        mask = mask[idx] > 0.0
-        in_mask = (pts[:,3] <= 0) & mask
+        in_mask = (pts[:,3] <= 0)
+        out_mask = np.logical_not(in_mask)
+        pts = pts[:,:3]
         in_pts = pts[in_mask]
-        out_pts = pts[in_mask]
+        out_pts = pts[out_mask]
 
         samples = np.concatenate([in_pts, out_pts], 0)
-        labels = np.concatenate([np.ones((in_pts.shape[0], 1)), np.zeros((out_pts.shape[0], 1))], 0)    
+        labels = np.concatenate([np.ones((in_pts.shape[0], 1)), np.zeros((out_pts.shape[0], 1))], 0)
         ratio = float(in_pts.shape[0])/float(out_pts.shape[0])
+
+        # save_samples_truncted_prob('test.ply', samples, labels)
 
         samples = torch.Tensor(samples.T).float()
         labels = torch.Tensor(labels.T).float()
@@ -564,8 +575,9 @@ class RPDatasetParts(Dataset):
         pts = 512*(0.5*p[sample_data['labels'].numpy().reshape(-1) == 1.0]+0.5)
         for p in pts:
             mask = cv2.circle(mask, (int(p[0]),int(p[1])), 2, (0,255.0,0), -1)
-        cv2.imshow('tmp.png', mask)
-        cv2.waitKey(1)
+        cv2.imwrite('tmp.png', mask)
+        exit()
+        # cv2.waitKey(1)
         res.update(render_data)
         res.update(sample_data)
         if self.num_sample_normal:

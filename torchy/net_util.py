@@ -94,3 +94,40 @@ class CustomMSELoss(nn.Module):
         loss = (weight * (pred - gt).pow(2)).mean()
 
         return loss.mean()
+
+def createMLP(dims, norm='bn', activation='relu', last_op=nn.Tanh(), dropout=False):
+    act = None
+    if activation == 'relu':
+        act = nn.ReLU()
+    if activation == 'lrelu':
+        act = nn.LeakyReLU()
+    if activation == 'selu':
+        act = nn.SELU()
+    if activation == 'elu':
+        act = nn.ELU()
+    if activation == 'prelu':
+        act = nn.PReLU()
+
+    mlp = []
+    for i in range(1,len(dims)):
+        if norm == 'bn':
+            mlp += [  nn.Linear(dims[i-1], dims[i]),
+                    nn.BatchNorm1d(dims[i])]
+        if norm == 'in':
+            mlp += [  nn.Linear(dims[i-1], dims[i]),
+                    nn.InstanceNorm1d(dims[i])]
+        if norm == 'wn':
+            mlp += [  nn.utils.weight_norm(nn.Linear(dims[i-1], dims[i]), name='weight')]
+        if norm == 'none':
+            mlp += [ nn.Linear(dims[i-1], dims[i])]
+        
+        if i != len(dims)-1:
+            if act is not None:
+                mlp += [act]
+            if dropout:
+                mlp += [nn.Dropout(0.2)]
+
+    if last_op is not None:
+        mlp += [last_op]
+
+    return mlp
