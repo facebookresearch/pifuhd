@@ -544,52 +544,52 @@ class RPDatasetParts(Dataset):
     def get_item(self, index):
         # in case of IO error, use random sampling instead
         subject = ''
-        # try:
-        sid = index % len(self.subjects)
-        tmp = index // len(self.subjects)
+        try:
+            sid = index % len(self.subjects)
+            tmp = index // len(self.subjects)
 
-        # test use pitch == 0 only
-        # also train doesn't use yaw == 0
-        vid = tmp % len(self.yaw_list)
-        pid = tmp // len(self.yaw_list)
+            # test use pitch == 0 only
+            # also train doesn't use yaw == 0
+            vid = tmp % len(self.yaw_list)
+            pid = tmp // len(self.yaw_list)
 
-        # name of the subjects 'rp_xxxx_xxx'
-        subject = self.subjects[sid]
-        res = {
-            'name': subject,
-            'mesh_path': os.path.join(self.OBJ, subject + '.obj'),
-            'sid': sid,
-            'vid': vid,
-            'pid': pid,
-            'b_min': self.B_MIN,
-            'b_max': self.B_MAX,
-        }
-        render_data = self.get_render(sid, num_views=self.num_views, view_id=vid,
-                                    pid=pid, random_sample=self.opt.random_multiview)
-        sample_data = self.select_sampling_method(subject, render_data['calib'][0].numpy(), render_data['mask'][0].numpy())        
-        p = sample_data['samples'].t().numpy()
-        calib = render_data['calib'][0].numpy()
-        mask = (255.0*(0.5*render_data['img'][0].permute(1,2,0).numpy()[:,:,::-1]+0.5)).astype(np.uint8)
-        # mask = 255.0*np.stack(3*[render_data['mask'][0,0].numpy()],2)
-        p = np.matmul(np.concatenate([p, np.ones((p.shape[0],1))], 1), calib.T)[:, :3]
-        pts = 512*(0.5*p[sample_data['labels'].numpy().reshape(-1) == 1.0]+0.5)
-        for p in pts:
-            mask = cv2.circle(mask, (int(p[0]),int(p[1])), 2, (0,255.0,0), -1)
-        cv2.imwrite('tmp.png', mask)
-        exit()
-        # cv2.waitKey(1)
-        res.update(render_data)
-        res.update(sample_data)
-        if self.num_sample_normal:
-            normal_data = self.get_normal_sampling(subject)
-            res.update(normal_data)
-        if self.num_sample_color:
-            color_data = self.get_color_sampling(subject, view_id=vid)
-            res.upate(color_data)
-        return res
-        # except Exception as e:
-        #     print(e)
-        #     return self.get_item(index=random.randint(0, self.__len__() - 1))
+            # name of the subjects 'rp_xxxx_xxx'
+            subject = self.subjects[sid]
+            res = {
+                'name': subject,
+                'mesh_path': os.path.join(self.OBJ, subject + '.obj'),
+                'sid': sid,
+                'vid': vid,
+                'pid': pid,
+                'b_min': self.B_MIN,
+                'b_max': self.B_MAX,
+            }
+            render_data = self.get_render(sid, num_views=self.num_views, view_id=vid,
+                                        pid=pid, random_sample=self.opt.random_multiview)
+            sample_data = self.select_sampling_method(subject, render_data['calib'][0].numpy(), render_data['mask'][0].numpy())        
+            # p = sample_data['samples'].t().numpy()
+            # calib = render_data['calib'][0].numpy()
+            # mask = (255.0*(0.5*render_data['img'][0].permute(1,2,0).numpy()[:,:,::-1]+0.5)).astype(np.uint8)
+            # # mask = 255.0*np.stack(3*[render_data['mask'][0,0].numpy()],2)
+            # p = np.matmul(np.concatenate([p, np.ones((p.shape[0],1))], 1), calib.T)[:, :3]
+            # pts = 512*(0.5*p[sample_data['labels'].numpy().reshape(-1) == 1.0]+0.5)
+            # for p in pts:
+            #     mask = cv2.circle(mask, (int(p[0]),int(p[1])), 2, (0,255.0,0), -1)
+            # cv2.imwrite('tmp.png', mask)
+            # exit()
+            # # cv2.waitKey(1)
+            res.update(render_data)
+            res.update(sample_data)
+            if self.num_sample_normal:
+                normal_data = self.get_normal_sampling(subject)
+                res.update(normal_data)
+            if self.num_sample_color:
+                color_data = self.get_color_sampling(subject, view_id=vid)
+                res.upate(color_data)
+            return res
+        except Exception as e:
+            print(e)
+            return self.get_item(index=random.randint(0, self.__len__() - 1))
 
     def __getitem__(self, index):
         return self.get_item(index)
