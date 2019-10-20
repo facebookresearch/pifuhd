@@ -60,7 +60,7 @@ class BaseOptions():
         g_sample.add_argument('--num_pts_dic', type=int, default=1, help='# of pts dic you load')
 
         g_sample.add_argument('--sampling_otf', action='store_true', help='Sampling on the fly')
-        g_sample.add_argument('--sampling_mode', type=str, default='sigma', help='Sampling file name.')
+        g_sample.add_argument('--sampling_mode', type=str, default='sigma_uniform', help='Sampling file name.')
         g_sample.add_argument('--linear_anneal_sigma', action='store_true', help='linear annealing of sigma')
         g_sample.add_argument('--sigma_max', type=float, default=0.0, help='maximum sigma for sampling')
         g_sample.add_argument('--sigma_min', type=float, default=0.0, help='minimum sigma for sampling')
