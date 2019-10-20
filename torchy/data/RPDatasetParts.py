@@ -13,6 +13,8 @@ import torch
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 
+from lib.sample_util import *
+
 def loadPoses(root, subjects):
     dic = {}
     for sub in subjects:
@@ -429,12 +431,15 @@ class RPDatasetParts(Dataset):
         pts = pts[idx[-self.num_sample_inout:]]
 
         in_mask = (pts[:,3] <= 0)
+        pts = pts[:,:3]
         in_pts = pts[in_mask]
         out_pts = pts[in_mask]
 
         samples = np.concatenate([in_pts, out_pts], 0)
         labels = np.concatenate([np.ones((in_pts.shape[0], 1)), np.zeros((out_pts.shape[0], 1))], 0)    
         ratio = float(in_pts.shape[0])/float(out_pts.shape[0])
+
+        save_samples_truncted_prob('test.ply', samples, labels)
 
         samples = torch.Tensor(samples.T).float()
         labels = torch.Tensor(labels.T).float()
@@ -563,8 +568,9 @@ class RPDatasetParts(Dataset):
         pts = 512*(0.5*p[sample_data['labels'].numpy().reshape(-1) == 1.0]+0.5)
         for p in pts:
             mask = cv2.circle(mask, (int(p[0]),int(p[1])), 2, (0,255.0,0), -1)
-        cv2.imshow('tmp.png', mask)
-        cv2.waitKey(1)
+        cv2.imwrite('tmp.png', mask)
+        exit()
+        # cv2.waitKey(1)
         res.update(render_data)
         res.update(sample_data)
         if self.num_sample_normal:

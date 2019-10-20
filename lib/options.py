@@ -59,6 +59,7 @@ class BaseOptions():
         g_sample.add_argument('--num_sample_color', type=int, default=0, help='# of sampling points')
         g_sample.add_argument('--num_pts_dic', type=int, default=1, help='# of pts dic you load')
 
+        g_sample.add_argument('--mask_ratio', type=float, default=0.5, help='maximum sigma for sampling')
         g_sample.add_argument('--sampling_otf', action='store_true', help='Sampling on the fly')
         g_sample.add_argument('--sampling_mode', type=str, default='sigma_uniform', help='Sampling file name.')
         g_sample.add_argument('--linear_anneal_sigma', action='store_true', help='linear annealing of sigma')
