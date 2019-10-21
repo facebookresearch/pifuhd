@@ -60,6 +60,7 @@ class BaseOptions():
         g_sample.add_argument('--num_pts_dic', type=int, default=1, help='# of pts dic you load')
 
         g_sample.add_argument('--crop_type', type=str, default='fullbody', help='Sampling file name.')
+        g_sample.add_argument('--uniform_ratio', type=float, default=0.1, help='maximum sigma for sampling')
         g_sample.add_argument('--mask_ratio', type=float, default=0.5, help='maximum sigma for sampling')
         g_sample.add_argument('--sampling_parts', action='store_true', help='Sampling on the fly')
         g_sample.add_argument('--sampling_otf', action='store_true', help='Sampling on the fly')

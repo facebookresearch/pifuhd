@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def create_grid(resX, resY, resZ, b_min=np.array([0, 0, 0]), b_max=np.array([1, 1, 1]), transform=None):
+def create_grid(resX, resY, resZ, b_min=np.array([-1, -1, -1]), b_max=np.array([1, 1, 1]), transform=None):
     '''
     Create a dense grid of given resolution and bounding box
     :param resX: resolution along X axis
