@@ -439,6 +439,13 @@ class RPDatasetParts(Dataset):
             'samples': [3, N]
             'labels': [1, N]
         '''
+        if not self.is_train:
+            random.seed(1991)
+            np.random.seed(1991)
+            sigma = 20.0
+        else:
+            sigma = self.opt.sigma
+
         SAMPLE_DIR = os.path.join(self.SAMPLE, subject)
 
         rand_idx = np.random.randint(num_files)
@@ -449,7 +456,7 @@ class RPDatasetParts(Dataset):
                (ptsh[:, 1] <= 1) & (ptsh[:, 2] >= -1) & (ptsh[:, 2] <= 1)
         pts = pts[inbb]
 
-        prob = np.exp(-((pts[:,3]*20.0)**2)/(2.0*self.opt.sigma*self.opt.sigma))
+        prob = np.exp(-((pts[:,3]*20.0)**2)/(2.0*sigma*sigma))
 
         ptsh = np.matmul(np.concatenate([pts[:,:3], np.ones((pts.shape[0],1))], 1), calib.T)[:, :3]
         if mask is not None:
