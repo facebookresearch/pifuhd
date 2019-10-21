@@ -473,7 +473,7 @@ class RPDatasetParts(Dataset):
         y = np.sin(phi) * np.sin(theta)
         z = np.cos(phi)
         dir = np.stack([x,y,z],1)
-        radius = np.abs(20.0*dist).clip(max=0.5)*np.random.rand(pts.shape[0])
+        radius = np.abs(20.0*dist).clip(max=1.0)*np.random.rand(pts.shape[0])
         pts += radius[:,None] * dir
         in_pts = pts[in_mask]
         out_pts = pts[out_mask]
