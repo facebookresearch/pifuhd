@@ -94,8 +94,8 @@ def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True):
         color = index(image_tensor[:1], uv).detach().cpu().numpy()[0].T
         color = color * 0.5 + 0.5
         save_obj_mesh_with_color(save_path, verts, faces, color)
-    except:
-        print('Can not create marching cubes at this time.')
+    except Exception as e:
+        print('Can not create marching cubes at this time.', e)
 
 def adjust_learning_rate(optimizer, epoch, lr, schedule, gamma):
     """Sets the learning rate to the initial LR decayed by schedule"""
