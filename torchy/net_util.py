@@ -72,25 +72,25 @@ class CustomBCELoss(nn.Module):
         self.brock = brock
         self.gamma = gamma
 
-    def forward(self, pred, gt):
+    def forward(self, pred, gt, gamma):
         x_hat = torch.clamp(pred, 1e-5, 1.0-1e-5) # prevent log(0) from happening
+        gamma = gamma[:,None,None]
         if self.brock:
             x = 3.0*gt - 1.0 # rescaled to [-1,2]
 
-            loss = -(self.gamma*x*torch.log(x_hat) + (1.0-self.gamma)*(1.0-x)*torch.log(1.0-x_hat))
+            loss = -(gamma*x*torch.log(x_hat) + (1.0-gamma)*(1.0-x)*torch.log(1.0-x_hat))
         else:
-            loss = -(self.gamma*gt*torch.log(x_hat) + (1.0-self.gamma)*(1.0-gt)*torch.log(1.0-x_hat))
+            loss = -(gamma*gt*torch.log(x_hat) + (1.0-gamma)*(1.0-gt)*torch.log(1.0-x_hat))
 
         return loss.mean()
 
 class CustomMSELoss(nn.Module):
-    def __init__(self, gamma=0.8):
+    def __init__(self):
         super(CustomMSELoss, self).__init__()
-        self.gamma = gamma
 
-    def forward(self, pred, gt):
-
-        weight = self.gamma * gt + (1.0-self.gamma) * (1 - gt)
+    def forward(self, pred, gt, gamma):
+        gamma = gamma[:,None,None]
+        weight = gamma * gt + (1.0-gamma) * (1 - gt)
         loss = (weight * (pred - gt).pow(2)).mean()
 
         return loss.mean()

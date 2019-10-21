@@ -13,6 +13,7 @@ class MLP(nn.Module):
         super(MLP, self).__init__()
 
         self.filters = nn.ModuleList()
+        self.norms = nn.ModuleList()
         self.num_views = num_views
         self.merge_layer = merge_layer if merge_layer > 0 else len(filter_channels) // 2
         self.res_layers = res_layers
@@ -31,6 +32,9 @@ class MLP(nn.Module):
                     filter_channels[l],
                     filter_channels[l+1],
                     1))
+            if l != len(filter_channels)-2:
+                self.norms.append(nn.GroupNorm(32, filter_channels[l+1]))
+
             self.add_module('conv%d' % l, self.filters[l])
 
     def forward(self, feature):
@@ -49,7 +53,7 @@ class MLP(nn.Module):
                 else torch.cat([y, tmpy], 1)
             )
             if i != len(self.filters)-1:
-                y = F.leaky_relu(y)
+                y = F.relu(self.norms[i](y))
             
             if self.num_views > 1 and i == self.merge_layer:
                 y = y.view(

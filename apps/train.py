@@ -163,6 +163,7 @@ def calc_error(opt, net, cuda, dataset, num_tests, label=None, thresh=0.5):
             image_tensor = data['img'].to(device=cuda)
             calib_tensor = data['calib'].to(device=cuda)
             sample_tensor = data['samples'].to(device=cuda).unsqueeze(0)
+            gamma_tensor = torch.Tensor([data['ratio']]).float().to(device=cuda).unsqueeze(0)
             if opt.num_views > 1:
                 sample_tensor = reshape_sample_tensor(sample_tensor, opt.num_views)
             label_tensor = data['labels'].to(device=cuda).unsqueeze(0)
@@ -173,7 +174,7 @@ def calc_error(opt, net, cuda, dataset, num_tests, label=None, thresh=0.5):
                 sample_nml_tensor = None
                 label_nml_tensor = None
 
-            error, res = net(image_tensor, sample_tensor, calib_tensor, label_tensor,\
+            error, res = net(image_tensor, sample_tensor, calib_tensor, label_tensor, gamma_tensor,\
                              sample_nml_tensor, label_nml_tensor)
 
             err = total_error(opt, error, False)
@@ -252,6 +253,9 @@ def train(opt, writer):
     elif opt.sampling_otf:
         train_dataset = RPOtfDataset(opt, phase='train')
         test_dataset = RPOtfDataset(opt, phase='val')
+    elif opt.sampling_parts:
+        train_dataset = RPDatasetParts(opt, phase='train')
+        test_dataset = RPDatasetParts(opt, phase='val')
     else:
         train_dataset = RPDataset(opt, phase='train')
         test_dataset = RPDataset(opt, phase='val')
@@ -271,11 +275,11 @@ def train(opt, writer):
     ls_thresh = 0.5 # level set boundary
     criteria = {}
     if opt.occ_loss_type == 'bce':
-        criteria['occ'] = CustomBCELoss(opt.occ_gamma, False)
+        criteria['occ'] = CustomBCELoss(False)
     elif opt.occ_loss_type == 'brock_bce':
-        criteria['occ'] = CustomBCELoss(opt.occ_gamma, True)
+        criteria['occ'] = CustomBCELoss(True)
     elif opt.occ_loss_type == 'mse':
-        criteria['occ'] = CustomMSELoss(opt.occ_gamma)
+        criteria['occ'] = CustomMSELoss()
     else:
         raise NameError('unknown loss type %s' % opt.occ_loss_type)
 
@@ -347,7 +351,7 @@ def train(opt, writer):
             image_tensor = train_data['img'].to(device=cuda)
             calib_tensor = train_data['calib'].to(device=cuda)
             sample_tensor = train_data['samples'].to(device=cuda)
-
+            gamma_tensor = train_data['ratio'].float().to(device=cuda)
             image_tensor, calib_tensor = reshape_multiview_tensors(image_tensor, calib_tensor)
 
             if opt.num_views > 1:
@@ -363,7 +367,7 @@ def train(opt, writer):
 
             iter_start_time = time.time()
 
-            errG, res = netG(image_tensor, sample_tensor, calib_tensor, label_tensor,\
+            errG, res = netG(image_tensor, sample_tensor, calib_tensor, label_tensor, gamma_tensor,
                              sample_nml_tensor, label_nml_tensor)
 
             err = total_error(opt, errG, multi_gpu)
@@ -440,7 +444,7 @@ def train(opt, writer):
                     print('generate mesh (train) ...')
                     random.seed(1)
                     data_idxs = random.sample(list(range(len(train_dataset))), k=opt.num_gen_mesh_test)
-                    for data_idx in data_idxs:
+                    for data_idx in tqdm(data_idxs):
                         train_data = train_dataset[data_idx]
                         save_path = '%s/%s/train_eval_epoch%d_%s_%d_%d.obj' % (
                             opt.results_path, opt.name, epoch, train_data['name'], train_data['vid'], train_data['pid'])
@@ -449,7 +453,7 @@ def train(opt, writer):
                     print('generate mesh (test) ...')
                     random.seed(1)
                     data_idxs = random.sample(list(range(len(test_dataset))), k=opt.num_gen_mesh_test)
-                    for data_idx in data_idxs:
+                    for data_idx in tqdm(data_idxs):
                         test_data = test_dataset[data_idx]
                         save_path = '%s/%s/test_eval_epoch%d_%s_%d_%d.obj' % (
                             opt.results_path, opt.name, epoch, test_data['name'], test_data['vid'], test_data['pid'])

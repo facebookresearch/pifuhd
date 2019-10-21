@@ -8,6 +8,7 @@ from PIL import Image, ImageOps
 from PIL.ImageFilter import GaussianBlur
 import cv2
 import trimesh
+from numpy.linalg import inv
 
 import torch
 from torch.utils.data import Dataset
@@ -21,6 +22,21 @@ def loadPoses(root, subjects):
         dic[sub] = np.load(os.path.join(root, '%s_100k.npy' % sub))
 
     return dic
+
+
+def save_points_color(filename, V, C=None, F=None):
+    with open(filename, "w") as file:
+        for i in range(V.shape[0]):
+            if C is not None:
+                file.write('v %f %f %f %f %f %f\n' % (V[i,0], V[i,1], V[i,2], C[i,0], C[i,1], C[i,2]))
+            else:
+                file.write('v %f %f %f\n' % (V[i,0], V[i,1], V[i,2]))
+                
+        if F is not None:
+            for i in range(F.shape[0]):
+                file.write('f %d %d %d\n' % (F[i,0]+1, F[i,1]+1, F[i,2]+1))
+        file.close()    
+
 
 def crop_image(img, rect):
     x, y, w, h = rect
@@ -42,6 +58,7 @@ def face_crop(pts):
     nflag = pts[0,2] > 0.1
     lflag = pts[17,2] > 0.1
     rflag = pts[18,2] > 0.1
+
     rear = pts[18,:2]
     lear = pts[17,:2]
     nose = pts[0,:2] if nflag else 0.5 * (rear + lear)
@@ -66,6 +83,7 @@ def upperbody_crop(pts):
     nflag = pts[0,2] > 0.1
     lflag = pts[17,2] > 0.1
     rflag = pts[18,2] > 0.1
+
     rear = pts[18,:2]
     lear = pts[17,:2]
     top = pts[0,:2]
@@ -162,8 +180,13 @@ class RPDatasetParts(Dataset):
         self.subjects = self.get_subjects()
 
         self.poses = loadPoses(self.POSE3D, self.subjects)
-
-        self.crop_func = face_crop
+        
+        if self.opt.crop_type == 'face':
+            self.crop_func = face_crop
+        elif self.opt.crop_type == 'upperbody':
+            self.crop_func = upperbody_crop
+        else:
+            self.crop_func = fullbody_crop
 
         # PIL to tensor
         self.to_tensor = transforms.Compose([
@@ -234,6 +257,16 @@ class RPDatasetParts(Dataset):
             param_path = os.path.join(self.PARAM, subject, '%d_%d_%02d.npy' % (vid, pitch, 0))
             render_path = os.path.join(self.RENDER, subject, '%d_%d_%02d.png' % (vid, pitch, 0))
 
+            with open(os.path.join(self.POSE2D, subject, '%d_%d_%02d_keypoints.json' % (vid, pitch, 0))) as json_file:
+                data = json.load(json_file)['people'][0]
+                keypoints = np.array(data['pose_keypoints_2d']).reshape(-1,3)
+
+                nflag = keypoints[0,2] > 0.1
+                lflag = keypoints[17,2] > 0.1
+                rflag = keypoints[18,2] > 0.1
+                if self.opt.crop_type != 'fullbody' and not nflag or not (lflag | rflag):
+                    raise IOError('face should be front')
+
             # load calibration data
             param = np.load(param_path, allow_pickle=True)
             # pixel unit / world unit
@@ -268,24 +301,21 @@ class RPDatasetParts(Dataset):
             trans_intrinsic = np.identity(4)
 
             intrinsic = np.matmul(scale_intrinsic, ndc_intrinsic)
-            with open(os.path.join(self.POSE2D, subject, '%d_%d_%02d_keypoints.json' % (vid, pitch, 0))) as json_file:
-                data = json.load(json_file)['people'][0]
-                keypoints = np.array(data['pose_keypoints_2d']).reshape(-1,3)
 
-                trans_mat = np.identity(4)
-                rect = self.crop_func(keypoints)
+            trans_mat = np.identity(4)
+            rect = self.crop_func(keypoints)
 
-                im = crop_image(im, rect)
+            im = crop_image(im, rect)
 
-                scale = w / rect[2]
-                trans_mat *= scale
-                trans_mat[3,3] = 1.0
-                trans_mat[0, 3] = -scale*(rect[0] + rect[2]//2 - w//2) * scale_im2ndc
-                trans_mat[1, 3] = -scale*(rect[1] + rect[3]//2 - h//2) * scale_im2ndc
-                
-                intrinsic = np.matmul(trans_mat, intrinsic)
-                im = cv2.resize(im, (self.load_size, self.load_size))
-           
+            scale = w / rect[2]
+            trans_mat *= scale
+            trans_mat[3,3] = 1.0
+            trans_mat[0, 3] = -scale*(rect[0] + rect[2]//2 - w//2) * scale_im2ndc
+            trans_mat[1, 3] = -scale*(rect[1] + rect[3]//2 - h//2) * scale_im2ndc
+            
+            intrinsic = np.matmul(trans_mat, intrinsic)
+            im = cv2.resize(im, (self.load_size, self.load_size))
+        
             im = im / 255.0
             im[:,:,:3] /= im[:,:,3:] + 1e-8
             im = (255.0 * im).astype(np.uint8)[:,:,[2,1,0,3]]
@@ -349,9 +379,8 @@ class RPDatasetParts(Dataset):
             render = render.crop((x1, y1, x1 + tw, y1 + th))
             mask = mask.crop((x1, y1, x1 + tw, y1 + th))
 
-            if self.opt.random_bg and len(self.bg_list) != 0:
-                if self.is_train:
-                    bg_path = os.path.join(self.BG, random.choice(self.bg_list))
+            if self.opt.random_bg and len(self.bg_list) != 0 and self.is_train:                
+                bg_path = os.path.join(self.BG, random.choice(self.bg_list))
             else:
                 uid = sid * len(self.yaw_list) * (view_id * len(self.pitch_list) + pitch) 
                 bg_path = os.path.join(self.BG, self.bg_list[uid % len(self.bg_list)])
@@ -434,6 +463,8 @@ class RPDatasetParts(Dataset):
             pts_outmask = pts_outmask[:int(self.opt.mask_ratio*pts_outmask.shape[0])]
             pts_outmask[:,3] = 1.0 # points out of mask are treated as points outside
             pts = np.concatenate([pts_inmask, pts_outmask], 0)
+            if pts.shape[0] < self.opt.num_sample_inout:
+                raise IOError('sampled points are less than num_sample_inout')
             pts = pts[np.random.permutation(np.arange(0,pts.shape[0]))[:self.opt.num_sample_inout]]
 
         in_mask = (pts[:,3] <= 0)
@@ -442,11 +473,24 @@ class RPDatasetParts(Dataset):
         in_pts = pts[in_mask]
         out_pts = pts[out_mask]
 
+        rand_pts = np.concatenate(
+            [2.0 * np.random.rand(self.num_sample_inout, 3) - 1.0, np.ones((self.num_sample_inout, 1))],
+            1)  # [-1,1]
+        x = (self.load_size * (0.5 * rand_pts[:,0] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
+        y = (self.load_size * (0.5 * rand_pts[:,1] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
+        idx = y * self.load_size + x
+        inmask = mask.reshape(-1)[idx] > 0.0
+        rand_pts = np.matmul(rand_pts, inv(calib).T)[:, :3]
+
+        in_max = in_pts.max(0) + 5.0
+        in_min = in_pts.min(0) - 5.0
+        bbox_in = np.logical_and(np.logical_and(inmask, rand_pts[:,2] < in_max[2]), rand_pts[:,2] > in_min[2])
+        rand_pts = rand_pts[np.logical_not(bbox_in)][:int(0.1*self.num_sample_inout)]
+        out_pts = np.concatenate([out_pts, rand_pts], 0)
+
         samples = np.concatenate([in_pts, out_pts], 0)
         labels = np.concatenate([np.ones((in_pts.shape[0], 1)), np.zeros((out_pts.shape[0], 1))], 0)
-        ratio = float(in_pts.shape[0])/float(out_pts.shape[0])
-
-        # save_samples_truncted_prob('test.ply', samples, labels)
+        ratio = float(out_pts.shape[0])/float(samples.shape[0])
 
         samples = torch.Tensor(samples.T).float()
         labels = torch.Tensor(labels.T).float()
@@ -577,7 +621,7 @@ class RPDatasetParts(Dataset):
             #     mask = cv2.circle(mask, (int(p[0]),int(p[1])), 2, (0,255.0,0), -1)
             # cv2.imwrite('tmp.png', mask)
             # exit()
-            # # cv2.waitKey(1)
+            # cv2.waitKey(1)
             res.update(render_data)
             res.update(sample_data)
             if self.num_sample_normal:
@@ -588,8 +632,11 @@ class RPDatasetParts(Dataset):
                 res.upate(color_data)
             return res
         except Exception as e:
-            print(e)
-            return self.get_item(index=random.randint(0, self.__len__() - 1))
+            for i in range(10):
+                try:
+                    return self.get_item(index=random.randint(0, self.__len__() - 1)) 
+                except Exception as e:
+                    continue
 
     def __getitem__(self, index):
         return self.get_item(index)

@@ -317,6 +317,7 @@ class RPOtfDataset(RPDataset):
         #                      :(self.num_sample_inout - nin)]    
         samples = np.concatenate([inside_points, outside_points], 0).T # [3, N]
         labels = np.concatenate([np.ones((1, inside_points.shape[0])), np.zeros((1, outside_points.shape[0]))], 1)
+        ratio = float(outside_points.shape[0])/float(samples.shape[0])
 
         # save_samples_truncted_prob('test.ply', samples.T, labels.T)
         # exit()
@@ -329,4 +330,5 @@ class RPOtfDataset(RPDataset):
         return {
             'samples': samples,
             'labels': labels,
+            'ratio': ratio
         }

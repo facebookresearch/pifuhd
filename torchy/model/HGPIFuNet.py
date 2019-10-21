@@ -184,14 +184,14 @@ class HGPIFuNet(BasePIFuNet):
         '''
         return self.im_feat_list[-1]
 
-    def get_error(self):
+    def get_error(self, gamma):
         '''
         return the loss given the ground truth labels and prediction
         '''
         error = {}
         error['Err(occ)'] = 0
         for preds in self.intermediate_preds_list:
-            error['Err(occ)'] += self.criteria['occ'](preds, self.labels)
+            error['Err(occ)'] += self.criteria['occ'](preds, self.labels, gamma)
         
         error['Err(occ)'] /= len(self.intermediate_preds_list)
         
@@ -204,13 +204,13 @@ class HGPIFuNet(BasePIFuNet):
 
         return error
 
-    def forward(self, images, points, calibs, labels, points_nml=None, labels_nml=None):
+    def forward(self, images, points, calibs, labels, gamma, points_nml=None, labels_nml=None):
         self.filter(images)
         self.query(points, calibs, labels=labels)
         if points_nml is not None and labels_nml is not None:
             self.calc_normal(points_nml, calibs, labels=labels_nml)
         res = self.get_preds()
             
-        err = self.get_error()
+        err = self.get_error(gamma)
 
         return err, res
