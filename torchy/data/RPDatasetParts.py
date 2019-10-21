@@ -47,7 +47,10 @@ def crop_image(img, rect):
     right = abs(img.shape[1]-(x+w)) if x + w >= img.shape[1] else 0
     bottom = abs(img.shape[0]-(y+h)) if y + h >= img.shape[0] else 0
     
-    color = [0, 0, 0]
+    if img.shape[2] == 4:
+        color = [0, 0, 0, 0]
+    else:
+        color = [0, 0, 0]
     new_img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)
 
     x = x + left
@@ -120,6 +123,7 @@ def fullbody_crop(pts):
     y2 = center[1] + radius
 
     return (x1, y1, x2-x1, y2-y1)
+
     
 class RPDatasetParts(Dataset):
     @staticmethod
@@ -133,6 +137,9 @@ class RPDatasetParts(Dataset):
         self.projection_mode = projection
 
         self.root = self.opt.dataroot
+
+        self.PARAM_WB = os.path.join(self.root, '../hf_human_big', 'PARAM')
+
         self.RENDER = os.path.join(self.root, 'RENDER')
         self.MASK = os.path.join(self.root, 'MASK')
         self.PARAM = os.path.join(self.root, 'PARAM')
@@ -302,6 +309,16 @@ class RPDatasetParts(Dataset):
             trans_intrinsic = np.identity(4)
 
             intrinsic = np.matmul(scale_intrinsic, ndc_intrinsic)
+
+            # for rendering with different resolution
+            param_wb_path = os.path.join(self.PARAM_WB, subject, '%d_%d_%02d.npy' % (vid, pitch, 0))
+            param_wb = np.load(param_wb_path, allow_pickle=True)
+
+            # camera center world coordinate
+            dp = center - param_wb.item().get('center')
+            dp[0] *= -1.0
+            s = scale / param_wb.item().get('scale')
+            keypoints[:,:2] = s * (keypoints[:,:2] + param_wb.item().get('scale') * dp[None,:2] / ortho_ratio - 512) + 512
 
             trans_mat = np.identity(4)
             rect = self.crop_func(keypoints)
