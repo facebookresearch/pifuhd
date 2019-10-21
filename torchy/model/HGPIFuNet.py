@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F 
@@ -33,6 +34,7 @@ class HGPIFuNet(BasePIFuNet):
             filter_channels=self.opt.mlp_dim,
             num_views=self.num_views,
             res_layers=self.opt.mlp_res_layers,
+            norm=self.opt.mlp_norm,
             last_op=nn.Sigmoid(),
             compose=self.opt.use_compose)
 
@@ -80,7 +82,7 @@ class HGPIFuNet(BasePIFuNet):
         '''
         xyz = self.projection(points, calibs, transforms)
         xy = xyz[:, :2, :]
-        
+
         # if the point is outside bounding box, return outside.
         in_bb = (xyz >= -1) & (xyz <= 1)
         in_bb = in_bb[:, 0, :] & in_bb[:, 1, :] & in_bb[:, 2, :]
@@ -88,6 +90,19 @@ class HGPIFuNet(BasePIFuNet):
 
         if labels is not None:
             self.labels = in_bb * labels
+
+        #     for i in range(xyz.size(0)):
+        #         p = xyz[i].detach().cpu().numpy().T
+        #         v = labels[i].detach().cpu().numpy().T
+
+        #         cin = np.ones_like(p[v[:,0] > 0.5])
+        #         cin[:,1:] = 0.0
+        #         save_points_color('%04d_in.obj' % i, p[v[:,0] > 0.5], cin)
+        #         cin = np.ones_like(p[v[:,0] <= 0.5])
+        #         cin[:,:2] = 0.0
+        #         save_points_color('%04d_out.obj' % i, p[v[:,0] <= 0.5], cin)
+
+        # exit()
 
         sp_feat = self.spatial_enc(xyz, calibs=calibs)
 

@@ -8,6 +8,7 @@ class MLP(nn.Module):
                  num_views=1, 
                  merge_layer=0,
                  res_layers=[],
+                 norm='group',
                  last_op=None,
                  compose=False):
         super(MLP, self).__init__()
@@ -17,6 +18,7 @@ class MLP(nn.Module):
         self.num_views = num_views
         self.merge_layer = merge_layer if merge_layer > 0 else len(filter_channels) // 2
         self.res_layers = res_layers
+        self.norm = norm
         self.last_op = last_op
         self.compose = compose
         self.y_nways = None # only for part composition
@@ -33,9 +35,10 @@ class MLP(nn.Module):
                     filter_channels[l+1],
                     1))
             if l != len(filter_channels)-2:
-                self.norms.append(nn.GroupNorm(32, filter_channels[l+1]))
-
-            self.add_module('conv%d' % l, self.filters[l])
+                if norm == 'group':
+                    self.norms.append(nn.GroupNorm(32, filter_channels[l+1]))
+                elif norm == 'batch':
+                    self.norms.append(nn.BatchNorm1d(filter_channels[l+1]))
 
     def forward(self, feature):
         '''
@@ -53,8 +56,10 @@ class MLP(nn.Module):
                 else torch.cat([y, tmpy], 1)
             )
             if i != len(self.filters)-1:
-                y = F.relu(self.norms[i](y))
-            
+                if self.norm not in ['batch', 'group']:
+                    y = F.leaky_relu(y)
+                else:
+                    y = F.leaky_relu(self.norms[i](y))         
             if self.num_views > 1 and i == self.merge_layer:
                 y = y.view(
                     -1, self.num_views, *y.size()[1:]

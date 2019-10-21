@@ -85,7 +85,7 @@ class HourGlass(nn.Module):
         low3 = low2
         low3 = self._modules['b3_' + str(level)](low3)
 
-        up2 = F.interpolate(low3, scale_factor=2, mode='bilinear')
+        up2 = F.interpolate(low3, scale_factor=2, mode='nearest')
 
         return up1 + up2
     

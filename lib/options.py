@@ -100,6 +100,7 @@ class BaseOptions():
 
         # Classification General
         g_model.add_argument('--imfeat_norm', action='store_true', help='image feature normalization')
+        g_model.add_argument('--mlp_norm', type=str, default='group', help='normalization for volume branch')
         g_model.add_argument('--mlp_dim', nargs='+', default=[1024, 512, 256, 128, 1], type=int,
                              help='# of dimensions of mlp. no need to put the first channel')
         g_model.add_argument('--mlp_res_layers', nargs='+', default=[2,3,4], type=int,

@@ -4,6 +4,7 @@ import torch
 from .sdf import create_grid, eval_grid_octree, eval_grid
 from skimage import measure
 
+from numpy.linalg import inv
 
 def reconstruction(net, cuda, calib_tensor,
                    resolution, b_min, b_max, thresh=0.5,
@@ -22,8 +23,15 @@ def reconstruction(net, cuda, calib_tensor,
     '''
     # First we create a grid by resolution
     # and transforming matrix for grid coordinates to real world xyz
-    coords, mat = create_grid(resolution, resolution, resolution,
-                              b_min, b_max, transform=transform)
+    coords, mat = create_grid(resolution, resolution, resolution)
+                              #b_min, b_max, transform=transform)
+
+    calib = calib_tensor[0].cpu().numpy()
+
+    calib_inv = inv(calib)
+    coords = coords.reshape(3,-1).T
+    coords = np.matmul(np.concatenate([coords, np.ones((coords.shape[0],1))], 1), calib_inv.T)[:, :3]
+    coords = coords.T.reshape(3,resolution,resolution,resolution)
 
     # Then we define the lambda function for cell evaluation
     def eval_func(points):
@@ -45,7 +53,8 @@ def reconstruction(net, cuda, calib_tensor,
     try:
         verts, faces, normals, values = measure.marching_cubes_lewiner(sdf, thresh)
         # transform verts into world coordinate system
-        verts = np.matmul(mat[:3, :3], verts.T) + mat[:3, 3:4]
+        trans_mat = np.matmul(calib_inv, mat)
+        verts = np.matmul(trans_mat[:3, :3], verts.T) + trans_mat[:3, 3:4]
         verts = verts.T
         return verts, faces, normals, values
     except:

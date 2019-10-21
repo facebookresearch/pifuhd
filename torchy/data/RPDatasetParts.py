@@ -2,6 +2,7 @@ import os
 import sys
 import random
 import json
+import math
 
 import numpy as np 
 from PIL import Image, ImageOps
@@ -55,9 +56,9 @@ def crop_image(img, rect):
     return new_img[y:(y+h),x:(x+w),:]
 
 def face_crop(pts):
-    nflag = pts[0,2] > 0.1
-    lflag = pts[17,2] > 0.1
-    rflag = pts[18,2] > 0.1
+    nflag = pts[0,2] > 0.2
+    lflag = pts[17,2] > 0.2
+    rflag = pts[18,2] > 0.2
 
     rear = pts[18,:2]
     lear = pts[17,:2]
@@ -80,9 +81,9 @@ def face_crop(pts):
 
 def upperbody_crop(pts):
     mshoulder = pts[1,:2]
-    nflag = pts[0,2] > 0.1
-    lflag = pts[17,2] > 0.1
-    rflag = pts[18,2] > 0.1
+    nflag = pts[0,2] > 0.2
+    lflag = pts[17,2] > 0.2
+    rflag = pts[18,2] > 0.2
 
     rear = pts[18,:2]
     lear = pts[17,:2]
@@ -106,7 +107,7 @@ def upperbody_crop(pts):
     return (x1, y1, x2-x1, y2-y1)
 
 def fullbody_crop(pts):
-    pts = pts[pts[:,2] > 0.1]
+    pts = pts[pts[:,2] > 0.2]
     pmax = pts.max(0)
     pmin = pts.min(0)
 
@@ -261,10 +262,10 @@ class RPDatasetParts(Dataset):
                 data = json.load(json_file)['people'][0]
                 keypoints = np.array(data['pose_keypoints_2d']).reshape(-1,3)
 
-                nflag = keypoints[0,2] > 0.1
-                lflag = keypoints[17,2] > 0.1
-                rflag = keypoints[18,2] > 0.1
-                if self.opt.crop_type != 'fullbody' and not nflag or not (lflag | rflag):
+                nflag = keypoints[0,2] > 0.2
+                lflag = keypoints[17,2] > 0.2
+                rflag = keypoints[18,2] > 0.2
+                if self.opt.crop_type != 'fullbody' and (not nflag or not (lflag | rflag)):
                     raise IOError('face should be front')
 
             # load calibration data
@@ -448,28 +449,32 @@ class RPDatasetParts(Dataset):
                (ptsh[:, 1] <= 1) & (ptsh[:, 2] >= -1) & (ptsh[:, 2] <= 1)
         pts = pts[inbb]
 
-        prob = np.random.rand(pts.shape[0]) * np.exp(-((pts[:,3]*20.0)**2)/(2.0*self.opt.sigma*self.opt.sigma))
-        idx = np.argpartition(prob, -2*self.num_sample_inout)[-2*self.num_sample_inout:]
+        prob = np.exp(-((pts[:,3]*20.0)**2)/(2.0*self.opt.sigma*self.opt.sigma))
 
-        pts = pts[idx]
         ptsh = np.matmul(np.concatenate([pts[:,:3], np.ones((pts.shape[0],1))], 1), calib.T)[:, :3]
         if mask is not None:
             x = (self.load_size * (0.5 * ptsh[:,0] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
             y = (self.load_size * (0.5 * ptsh[:,1] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
             idx = y * self.load_size + x
             inmask = mask.reshape(-1)[idx] > 0.0
-            pts_inmask = pts[inmask]
-            pts_outmask = pts[np.logical_not(inmask)]
-            pts_outmask = pts_outmask[:int(self.opt.mask_ratio*pts_outmask.shape[0])]
-            pts_outmask[:,3] = 1.0 # points out of mask are treated as points outside
-            pts = np.concatenate([pts_inmask, pts_outmask], 0)
-            if pts.shape[0] < self.opt.num_sample_inout:
-                raise IOError('sampled points are less than num_sample_inout')
-            pts = pts[np.random.permutation(np.arange(0,pts.shape[0]))[:self.opt.num_sample_inout]]
+            prob_mask = (1.0-self.opt.mask_ratio) * mask.reshape(-1)[idx] + self.opt.mask_ratio
+            prob = prob_mask * prob
+        idx = np.random.choice(np.arange(0,pts.shape[0]),self.opt.num_sample_inout,p=prob/prob.sum())
+        pts = pts[idx]
 
         in_mask = (pts[:,3] <= 0)
         out_mask = np.logical_not(in_mask)
+        dist = pts[:,3]
         pts = pts[:,:3]
+
+        theta = 2.0 * math.pi * np.random.rand(pts.shape[0])
+        phi = np.arccos(1 - 2 * np.random.rand(pts.shape[0]))
+        x = np.sin(phi) * np.cos(theta)
+        y = np.sin(phi) * np.sin(theta)
+        z = np.cos(phi)
+        dir = np.stack([x,y,z],1)
+        radius = np.abs(20.0*dist).clip(max=0.5)*np.random.rand(pts.shape[0])
+        pts += radius[:,None] * dir
         in_pts = pts[in_mask]
         out_pts = pts[out_mask]
 
@@ -485,12 +490,18 @@ class RPDatasetParts(Dataset):
         in_max = in_pts.max(0) + 5.0
         in_min = in_pts.min(0) - 5.0
         bbox_in = np.logical_and(np.logical_and(inmask, rand_pts[:,2] < in_max[2]), rand_pts[:,2] > in_min[2])
-        rand_pts = rand_pts[np.logical_not(bbox_in)][:int(0.1*self.num_sample_inout)]
+        rand_pts = rand_pts[np.logical_not(bbox_in)][:int(self.opt.uniform_ratio*self.num_sample_inout)]
         out_pts = np.concatenate([out_pts, rand_pts], 0)
 
         samples = np.concatenate([in_pts, out_pts], 0)
         labels = np.concatenate([np.ones((in_pts.shape[0], 1)), np.zeros((out_pts.shape[0], 1))], 0)
         ratio = float(out_pts.shape[0])/float(samples.shape[0])
+
+        if ratio > 0.99:
+            raise IOError('invalid data sample')
+
+        if samples.shape[0] != self.opt.num_sample_inout + int(self.opt.uniform_ratio * self.num_sample_inout):
+            raise IOError('unable to sample sufficient number of points')
 
         samples = torch.Tensor(samples.T).float()
         labels = torch.Tensor(labels.T).float()
