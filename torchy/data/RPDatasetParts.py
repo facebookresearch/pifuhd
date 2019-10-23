@@ -332,7 +332,7 @@ class RPDatasetParts(Dataset):
             param_wb = np.load(param_wb_path, allow_pickle=True)
 
             # camera center world coordinate
-            dp = center - param_wb.item().get('center')
+            dp = np.matmul(R, (center - param_wb.item().get('center'))[:,None])[:,0]
             dp[0] *= -1.0
             s = scale / param_wb.item().get('scale')
             keypoints[:,:2] = s * (keypoints[:,:2] + param_wb.item().get('scale') * dp[None,:2] / ortho_ratio - 512) + 512
