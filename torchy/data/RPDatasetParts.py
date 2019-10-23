@@ -536,7 +536,7 @@ class RPDatasetParts(Dataset):
             'ratio': ratio
         }
 
-    def get_normal_sampling(self, subject):
+    def get_normal_sampling(self, subject, calib):
         uv_pos_path = os.path.join(self.UV_POS, subject, '%02d.exr' % (0))
         uv_normal_path = os.path.join(self.UV_NORMAL, subject, '%02d.png' % (0))
         uv_mask_path = os.path.join(self.UV_MASK, subject, '%02d.png' % (0)) 
@@ -558,6 +558,13 @@ class RPDatasetParts(Dataset):
 
         surface_points = uv_pos[mask].T
         surface_normals = uv_normal[mask].T
+
+        ptsh = np.matmul(np.concatenate([surface_points[:,:3], np.ones((surface_points.shape[0],1))], 1), calib.T)[:, :3]
+        inbb = (ptsh[:, 0] >= -1) & (ptsh[:, 0] <= 1) & (ptsh[:, 1] >= -1) & \
+               (ptsh[:, 1] <= 1) & (ptsh[:, 2] >= -1) & (ptsh[:, 2] <= 1)
+        
+        surface_points = surface_points[inbb]
+        surface_normals = surface_normals[inbb]
 
         if self.num_sample_normal:
             sample_list = random.sample(range(0, surface_points.shape[1] - 1), self.num_sample_normal)

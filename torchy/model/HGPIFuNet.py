@@ -123,7 +123,7 @@ class HGPIFuNet(BasePIFuNet):
         
         self.preds = self.intermediate_preds_list[-1]
 
-    def calc_normal(self, points, calibs, transforms=None, labels=None, delta=0.1, fd_type='forward'):
+    def calc_normal(self, points, calibs, transforms=None, labels=None):
         '''
         return surface normal in 'model' space.
         it computes normal only in the last stack.
@@ -135,19 +135,10 @@ class HGPIFuNet(BasePIFuNet):
             delta: perturbation for finite difference
             fd_type: finite difference type (forward/backward/central) 
         '''
-        pdx = points.clone()
-        pdx[:,0,:] += delta
-        pdy = points.clone()
-        pdy[:,1,:] += delta
-        pdz = points.clone()
-        pdz[:,2,:] += delta
-
         if labels is not None:
             self.labels_nml = labels
 
-        points_all = torch.stack([points, pdx, pdy, pdz], 3)
-        points_all = points_all.view(*points.size()[:2],-1)
-        xyz = self.projection(points_all, calibs, transforms)
+        xyz = self.projection(points, calibs, transforms)
         xy = xyz[:, :2, :]
 
         im_feat = self.im_feat_list[-1]
@@ -155,26 +146,18 @@ class HGPIFuNet(BasePIFuNet):
 
         if self.opt.sp_enc_type == 'vol' and self.opt.sp_no_pifu:
             point_local_feat = sp_feat
-        # elif self.opt.imfeat_norm: # experimental
-        #     point_local_feat_list = [F.normalize(self.index(im_feat, xy),dim=1,eps=1e-8), sp_feat]            
-        #     point_local_feat = torch.cat(point_local_feat_list, 1)
         else:
             point_local_feat_list = [self.index(im_feat, xy), sp_feat]            
             point_local_feat = torch.cat(point_local_feat_list, 1)
+            
         pred = self.mlp(point_local_feat)
 
-        pred = pred.view(*pred.size()[:2],-1,4) # (B, 1, N, 4)
-
-        # divide by delta is omitted since it's normalized anyway
-        dfdx = pred[:,:,:,1] - pred[:,:,:,0]
-        dfdy = pred[:,:,:,2] - pred[:,:,:,0]
-        dfdz = pred[:,:,:,3] - pred[:,:,:,0]
-
-        nml = -torch.cat([dfdx,dfdy,dfdz], 1)
+        pred_sum = pred.sum()
+        
+        nml = -torch.autograd.grad(pred_sum, points, create_graph=True)[0]
         nml = F.normalize(nml, dim=1, eps=1e-8)
 
         self.nmls = nml
-        self.preds_surface = pred[:,:,:,0]
 
     def calc_comp_ids(self, points, calibs, transforms=None):
         '''
@@ -212,7 +195,6 @@ class HGPIFuNet(BasePIFuNet):
         
         if self.nmls is not None and self.labels_nml is not None:
             error['Err(nml)'] = self.criteria['nml'](self.nmls, self.labels_nml)
-            error['Err(occ)'] += self.criteria['occ'](self.preds_surface, 0.5*torch.ones_like(self.preds_surface))
         
         if self.mlp.y_nways is not None and self.opt.lambda_cmp_l1 != 0.0:
             error['Err(L1)'] = self.mlp.y_nways.abs().sum(1).mean()
