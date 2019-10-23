@@ -235,7 +235,7 @@ def train(opt):
     if state_dict_path is not None and os.path.exists(state_dict_path):
         print('Resuming from ', state_dict_path)
         state_dict = torch.load(state_dict_path)    
-        if 'opt' in state_dict:
+        if not opt.finetune and 'opt' in state_dict:
             print('Warning: opt is overwritten.')
             continue_train = opt.continue_train
             opt = state_dict['opt']
@@ -254,6 +254,9 @@ def train(opt):
     if opt.use_tsdf:
         train_dataset = RPTSDFDataset(opt, phase='train')
         test_dataset = RPTSDFDataset(opt, phase='val')
+    elif opt.sampling_otf and opt.sampling_parts:
+        train_dataset = RPOtfDatasetParts(opt, phase='train')
+        test_dataset = RPOtfDatasetParts(opt, phase='val')
     elif opt.sampling_otf:
         train_dataset = RPOtfDataset(opt, phase='train')
         test_dataset = RPOtfDataset(opt, phase='val')
@@ -293,7 +296,7 @@ def train(opt):
         criteria['nml'] = nn.L1Loss()
     else:
         raise NameError('unknown loss type %s' % opt.nml_loss_type)
-
+    
     netG = HGPIFuNet(opt, projection_mode, criteria)
     lr = opt.learning_rate
     
@@ -312,7 +315,7 @@ def train(opt):
     
         if 'epoch' in state_dict:
             opt.resume_epoch = state_dict['epoch']
-        if opt.resume_epoch < 0:
+        if opt.resume_epoch < 0 or opt.finetune:
             opt.resume_epoch = 0
  
     netG = netG.to(device=cuda)
@@ -325,7 +328,7 @@ def train(opt):
 
     optimizerG = torch.optim.RMSprop(netG.parameters(), lr=opt.learning_rate, momentum=0, weight_decay=0)
 
-    if state_dict is not None and 'optimizer_state_dict' in state_dict:
+    if not opt.finetune and state_dict is not None and 'optimizer_state_dict' in state_dict:
         optimizerG.load_state_dict(state_dict['optimizer_state_dict'])
 
     os.makedirs(opt.checkpoints_path, exist_ok=True)
@@ -337,9 +340,9 @@ def train(opt):
         outfile.write(json.dumps(vars(opt), indent=2))
 
     # training
-    start_epoch = 0 if not opt.continue_train else opt.resume_epoch
+    start_epoch = 0 if opt.finetune or not opt.continue_train else opt.resume_epoch
     num_epoch = 1 + opt.num_iter // len(train_data_loader)
-    cur_iter = state_dict['cur_iter'] if state_dict is not None and 'cur_iter' in state_dict \
+    cur_iter = state_dict['cur_iter'] if not opt.finetune and state_dict is not None and 'cur_iter' in state_dict \
                 else start_epoch * len(train_data_loader)
     max_IOU = 0.0
 

@@ -123,7 +123,7 @@ class HGPIFuNet(BasePIFuNet):
         
         self.preds = self.intermediate_preds_list[-1]
 
-    def calc_normal(self, points, calibs, transforms=None, labels=None):
+    def calc_normal(self, points, calibs, transforms=None, labels=None, delta=0.01, fd_type='forward'):
         '''
         return surface normal in 'model' space.
         it computes normal only in the last stack.
@@ -135,29 +135,80 @@ class HGPIFuNet(BasePIFuNet):
             delta: perturbation for finite difference
             fd_type: finite difference type (forward/backward/central) 
         '''
+        pdx = points.clone()
+        pdx[:,0,:] += delta
+        pdy = points.clone()
+        pdy[:,1,:] += delta
+        pdz = points.clone()
+        pdz[:,2,:] += delta
+
         if labels is not None:
             self.labels_nml = labels
 
-        xyz = self.projection(points, calibs, transforms)
+        points_all = torch.stack([points, pdx, pdy, pdz], 3)
+        points_all = points_all.view(*points.size()[:2],-1)
+        xyz = self.projection(points_all, calibs, transforms)
         xy = xyz[:, :2, :]
 
         im_feat = self.im_feat_list[-1]
         sp_feat = self.spatial_enc(xyz, calibs=calibs)
 
-        if self.opt.sp_enc_type == 'vol' and self.opt.sp_no_pifu:
+        if self.opt.sp_enc_type == 'vol_enc' and self.opt.sp_no_pifu:
             point_local_feat = sp_feat
         else:
             point_local_feat_list = [self.index(im_feat, xy), sp_feat]            
             point_local_feat = torch.cat(point_local_feat_list, 1)
-            
         pred = self.mlp(point_local_feat)
 
-        pred_sum = pred.sum()
-        
-        nml = -torch.autograd.grad(pred_sum, points, create_graph=True)[0]
+        pred = pred.view(*pred.size()[:2],-1,4) # (B, 1, N, 4)
+
+        # divide by delta is omitted since it's normalized anyway
+        dfdx = pred[:,:,:,1] - pred[:,:,:,0]
+        dfdy = pred[:,:,:,2] - pred[:,:,:,0]
+        dfdz = pred[:,:,:,3] - pred[:,:,:,0]
+
+        nml = -torch.cat([dfdx,dfdy,dfdz], 1)
         nml = F.normalize(nml, dim=1, eps=1e-8)
 
         self.nmls = nml
+
+    # bilinear sampling doesn't support gradient backprop
+    # def calc_normal(self, points, calibs, transforms=None, labels=None):
+    #     '''
+    #     return surface normal in 'model' space.
+    #     it computes normal only in the last stack.
+    #     note that the current implementation use forward difference.
+    #     args:
+    #         points: [B, 3, N] 3d points in world space
+    #         calibs: [B, 3, 4] calibration matrices for each image
+    #         transforms: [B, 2, 3] image space coordinate transforms
+    #         delta: perturbation for finite difference
+    #         fd_type: finite difference type (forward/backward/central) 
+    #     '''
+    #     if labels is not None:
+    #         self.labels_nml = labels
+
+    #     points.requires_grad = True
+    #     xyz = self.projection(points, calibs, transforms)
+    #     xy = xyz[:, :2, :]
+
+    #     im_feat = self.im_feat_list[-1]
+    #     sp_feat = self.spatial_enc(xyz, calibs=calibs)
+
+    #     if self.opt.sp_enc_type == 'vol' and self.opt.sp_no_pifu:
+    #         point_local_feat = sp_feat
+    #     else:
+    #         point_local_feat_list = [self.index(im_feat, xy), sp_feat]            
+    #         point_local_feat = torch.cat(point_local_feat_list, 1)
+            
+    #     pred = self.mlp(point_local_feat)
+
+    #     pred_sum = pred.sum()
+        
+    #     nml = -torch.autograd.grad(pred_sum, points, create_graph=True)[0]
+    #     nml = F.normalize(nml, dim=1, eps=1e-8)
+
+    #     self.nmls = nml
 
     def calc_comp_ids(self, points, calibs, transforms=None):
         '''

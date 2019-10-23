@@ -442,7 +442,7 @@ class RPDatasetParts(Dataset):
             'mask': torch.stack(mask_list, dim=0)
         }
 
-    def select_sampling_method(self, subject, calib, mask=None):
+    def get_sample(self, subject, calib, mask=None):
         return self.load_points_sample(subject, calib, mask)
     
     def load_points_sample(self, subject, calib, mask, num_files=100):
@@ -559,12 +559,13 @@ class RPDatasetParts(Dataset):
         surface_points = uv_pos[mask].T
         surface_normals = uv_normal[mask].T
 
-        ptsh = np.matmul(np.concatenate([surface_points[:,:3], np.ones((surface_points.shape[0],1))], 1), calib.T)[:, :3]
+        ptsh = np.matmul(np.concatenate([surface_points.T, np.ones((surface_points.shape[1],1))], 1), calib.T)[:, :3]
+
         inbb = (ptsh[:, 0] >= -1) & (ptsh[:, 0] <= 1) & (ptsh[:, 1] >= -1) & \
                (ptsh[:, 1] <= 1) & (ptsh[:, 2] >= -1) & (ptsh[:, 2] <= 1)
-        
-        surface_points = surface_points[inbb]
-        surface_normals = surface_normals[inbb]
+
+        surface_points = surface_points[:,inbb]
+        surface_normals = surface_normals[:,inbb]
 
         if self.num_sample_normal:
             sample_list = random.sample(range(0, surface_points.shape[1] - 1), self.num_sample_normal)
@@ -652,7 +653,7 @@ class RPDatasetParts(Dataset):
             }
             render_data = self.get_render(sid, num_views=self.num_views, view_id=vid,
                                         pid=pid, random_sample=self.opt.random_multiview)
-            sample_data = self.select_sampling_method(subject, render_data['calib'][0].numpy(), render_data['mask'][0].numpy())        
+            sample_data = self.get_sample(subject, render_data['calib'][0].numpy(), render_data['mask'][0].numpy())        
             # p = sample_data['samples'].t().numpy()
             # calib = render_data['calib'][0].numpy()
             # mask = (255.0*(0.5*render_data['img'][0].permute(1,2,0).numpy()[:,:,::-1]+0.5)).astype(np.uint8)
@@ -667,7 +668,7 @@ class RPDatasetParts(Dataset):
             res.update(render_data)
             res.update(sample_data)
             if self.num_sample_normal:
-                normal_data = self.get_normal_sampling(subject)
+                normal_data = self.get_normal_sampling(subject, render_data['calib'][0].numpy())
                 res.update(normal_data)
             if self.num_sample_color:
                 color_data = self.get_color_sampling(subject, view_id=vid)

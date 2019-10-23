@@ -40,6 +40,17 @@ def batch_eval(points, eval_func, num_samples=512 * 512 * 512):
 
     return sdf
 
+def batch_eval_tensor(points, eval_func, num_samples=512 * 512 * 512):
+    num_pts = points.size(1)
+
+    num_batches = num_pts // num_samples
+    vals = []
+    for i in range(num_batches):
+        vals.append(eval_func(points[:, i * num_samples:i * num_samples + num_samples]))
+    if num_pts % num_samples:
+        vals.append(eval_func(points[:, num_batches * num_samples:]))
+
+    return np.concatenate(vals,0)
 
 def eval_grid(coords, eval_func, num_samples=512 * 512 * 512):
     resolution = coords.shape[1:4]

@@ -21,6 +21,7 @@ from lib.options import BaseOptions
 from lib.visualizer import Visualizer
 from lib.mesh_util import *
 from lib.sample_util import *
+from lib.sdf import *
 from torchy.data import *
 from torchy.model import *
 from torchy.geometry import index
@@ -83,7 +84,7 @@ def reshape_sample_tensor(sample_tensor, num_views):
     )
     return sample_tensor
 
-def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=False, components=False):
+def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True, components=False):
     image_tensor = data['img'].to(device=cuda)
     calib_tensor = data['calib'].to(device=cuda)
 
@@ -101,17 +102,21 @@ def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=False, comp
         cv2.imwrite(save_img_path, save_img)
 
         verts, faces, _, _ = reconstruction(
-            net, cuda, calib_tensor, res, b_min, b_max, thresh, use_octree=use_octree, num_samples=500000)
+            net, cuda, calib_tensor, res, b_min, b_max, thresh, use_octree=use_octree, num_samples=100000)
         verts_tensor = torch.from_numpy(verts.T).unsqueeze(0).to(device=cuda).float()
         if not components:
-            net.calc_normal(verts_tensor, calib_tensor[:1])
-            color = net.nmls.detach().cpu().numpy()[0].T
+            xyz_tensor = net.projection(verts_tensor, calib_tensor[:1])
+            uv = xyz_tensor[:, :2, :]
+            color = index(image_tensor[:1], uv).detach().cpu().numpy()[0].T
+            # def eval_func(points):
+            #     net.calc_normal(points, calib_tensor[:1])
+            #     nml = net.nmls.detach().cpu().numpy()[0].T
+            #     del net.nmls
+            #     return nml
+            # color = batch_eval_tensor(verts_tensor, eval_func, num_samples=10000)
         else:
             nways = net.calc_comp_ids(verts_tensor, calib_tensor[:1])
             color = label_to_color(nways[0].detach().cpu().numpy())
-        # xyz_tensor = net.projection(verts_tensor, calib_tensor[:1])
-        # uv = xyz_tensor[:, :2, :]
-        # color = index(image_tensor[:1], uv).detach().cpu().numpy()[0].T
         color = color * 0.5 + 0.5
         save_obj_mesh_with_color(save_path, verts, faces, color)
     except Exception as e:
@@ -250,8 +255,12 @@ def eval(opt):
 
     if opt.use_tsdf:
         test_dataset = RPTSDFDataset(opt, phase='val')
+    elif opt.sampling_otf and opt.sampling_parts:
+        test_dataset = RPOtfDatasetParts(opt, phase='val')
     elif opt.sampling_otf:
         test_dataset = RPOtfDataset(opt, phase='val')
+    elif opt.sampling_parts:
+        test_dataset = RPDatasetParts(opt, phase='val')
     else:
         test_dataset = RPDataset(opt, phase='val')
 
@@ -290,12 +299,12 @@ def eval(opt):
             err = calc_error(opt, netG, cuda, test_dataset, 100, 'test')
             print('eval: ', ''.join(['{}: {:.6f} '.format(k, v) for k,v in err.items()]))
 
-        if not opt.no_mesh_recon:
-            print('generate mesh (test) ...')
-            for test_data in tqdm(test_dataset):
-                save_path = '%s/%s/eval/test_eval_%s_%d_%d.obj' % (
-                    opt.results_path, opt.name, test_data['name'], test_data['vid'], test_data['pid'])
-                gen_mesh(opt.resolution, netG, cuda, test_data, save_path, components=opt.use_compose)
+    if not opt.no_mesh_recon:
+        print('generate mesh (test) ...')
+        for test_data in tqdm(test_dataset):
+            save_path = '%s/%s/eval/test_eval_%s_%d_%d.obj' % (
+                opt.results_path, opt.name, test_data['name'], test_data['vid'], test_data['pid'])
+            gen_mesh(opt.resolution, netG, cuda, test_data, save_path, components=opt.use_compose)
 
 def evalWrapper(args=None):
     opt = parser.parse(args)

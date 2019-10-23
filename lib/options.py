@@ -45,6 +45,7 @@ class BaseOptions():
         g_train.add_argument('--freq_save_image', type=int, default=100, help='freqency of the save input image')
         g_train.add_argument('--resume_epoch', type=int, default=-1, help='epoch resuming the training')
         g_train.add_argument('--continue_train', action='store_true', help='continue training: load the latest model')
+        g_train.add_argument('--finetune', action='store_true', help='fine tuning netG in training C')
 
         # Testing related
         g_test = parser.add_argument_group('Testing')
@@ -55,6 +56,7 @@ class BaseOptions():
         # Sampling related
         g_sample = parser.add_argument_group('Sampling')
         g_sample.add_argument('--num_sample_inout', type=int, default=6000, help='# of sampling points')
+        g_sample.add_argument('--num_sample_surface', type=int, default=0, help='# of sampling points')
         g_sample.add_argument('--num_sample_normal', type=int, default=0, help='# of sampling points')
         g_sample.add_argument('--num_sample_color', type=int, default=0, help='# of sampling points')
         g_sample.add_argument('--num_pts_dic', type=int, default=1, help='# of pts dic you load')
@@ -69,7 +71,8 @@ class BaseOptions():
         g_sample.add_argument('--sigma_max', type=float, default=0.0, help='maximum sigma for sampling')
         g_sample.add_argument('--sigma_min', type=float, default=0.0, help='minimum sigma for sampling')
         g_sample.add_argument('--sigma', type=float, default=1.0, help='sigma for sampling')
-
+        g_sample.add_argument('--sigma_surface', type=float, default=1.0, help='sigma for sampling')
+        
         g_sample.add_argument('--z_size', type=float, default=200.0, help='z normalization factor')
 
         # Model related
