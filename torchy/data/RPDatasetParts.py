@@ -59,20 +59,37 @@ def crop_image(img, rect):
     return new_img[y:(y+h),x:(x+w),:]
 
 def face_crop(pts):
-    nflag = pts[0,2] > 0.2
-    lflag = pts[17,2] > 0.2
-    rflag = pts[18,2] > 0.2
+    flag = pts[:,2] > 0.2
 
+    mshoulder = pts[1,:2]
     rear = pts[18,:2]
     lear = pts[17,:2]
-    nose = pts[0,:2] if nflag else 0.5 * (rear + lear)
+    nose = pts[0,:2]
 
-    center = nose
-    if lflag and not rflag:
-        center = lear
-    elif rflag and not lflag:
-        center = rear
-    radius = int(2.5*np.max(np.sqrt(((center[None] - np.stack([nose, rear if rflag else center, lear if lflag else center],0))**2).sum(1))))
+    center = np.copy(mshoulder)
+    center[1] = min(nose[1] if flag[0] else 1e8, lear[1] if flag[17] else 1e8, rear[1] if flag[18] else 1e8)
+
+    ps = []
+    pts_id = [0, 15, 16, 17, 18]
+    cnt = 0
+    for i in pts_id:
+        if flag[i]:
+            ps.append(pts[i,:2])
+            if i in [17, 18]:
+                cnt += 1
+
+    ps = np.stack(ps, 0)
+    if ps.shape[0] <= 1:
+        raise IOError('key points are not properly set')
+    if ps.shape[0] <= 3 and cnt != 2:
+        center = ps[-1]
+    else:
+        center = ps.mean(0)
+    radius = int(1.4*np.max(np.sqrt(((ps - center[None,:])**2).reshape(-1,2).sum(0))))
+
+
+    # radius = np.max(np.sqrt(((center[None] - np.stack([]))**2).sum(0))
+    # radius = int(1.0*abs(center[1] - mshoulder[1]))
     center = center.astype(np.int)
 
     x1 = center[0] - radius
@@ -260,7 +277,7 @@ class RPDatasetParts(Dataset):
         render_list = []
         mask_list = []
         extrinsic_list = []
-
+        file_list = []
         for vid in view_ids:
             param_path = os.path.join(self.PARAM, subject, '%d_%d_%02d.npy' % (vid, pitch, 0))
             render_path = os.path.join(self.RENDER, subject, '%d_%d_%02d.png' % (vid, pitch, 0))
@@ -434,12 +451,14 @@ class RPDatasetParts(Dataset):
             render_list.append(render)
             calib_list.append(calib)
             extrinsic_list.append(extrinsic)
+            file_list.append(render_path)
 
         return {
             'img': torch.stack(render_list, dim=0),
             'calib': torch.stack(calib_list, dim=0),
             'extrinsic': torch.stack(extrinsic_list, dim=0),
-            'mask': torch.stack(mask_list, dim=0)
+            'mask': torch.stack(mask_list, dim=0),
+            'name': file_list
         }
 
     def get_sample(self, subject, calib, mask=None):
@@ -657,14 +676,15 @@ class RPDatasetParts(Dataset):
             # p = sample_data['samples'].t().numpy()
             # calib = render_data['calib'][0].numpy()
             # mask = (255.0*(0.5*render_data['img'][0].permute(1,2,0).numpy()[:,:,::-1]+0.5)).astype(np.uint8)
-            # # mask = 255.0*np.stack(3*[render_data['mask'][0,0].numpy()],2)
+            # mask = 255.0*np.stack(3*[render_data['mask'][0,0].numpy()],2)
             # p = np.matmul(np.concatenate([p, np.ones((p.shape[0],1))], 1), calib.T)[:, :3]
             # pts = 512*(0.5*p[sample_data['labels'].numpy().reshape(-1) == 1.0]+0.5)
             # for p in pts:
             #     mask = cv2.circle(mask, (int(p[0]),int(p[1])), 2, (0,255.0,0), -1)
-            # cv2.imwrite('tmp.png', mask)
+            # mask = cv2.putText(mask, render_data['name'][0], (5, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 0, 0), lineType=cv2.LINE_AA) 
+            # cv2.imshow('tmp.img', mask)
             # exit()
-            # cv2.waitKey(1)
+            # cv2.waitKey(10)
             res.update(render_data)
             res.update(sample_data)
             if self.num_sample_normal:
