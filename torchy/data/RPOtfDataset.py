@@ -237,9 +237,31 @@ class RPOtfDataset(RPDataset):
         mesh = copy.deepcopy(g_mesh_dics[subject])
         poses = self.poses[subject]
 
-        ratio = 0.8
+        ratio = 1.0 - self.opt.uniform_ratio
         if 'sigma' in self.opt.sampling_mode:
-            surface_points, fid = trimesh.sample.sample_surface(mesh, int(4.0 * ratio * self.num_sample_inout))
+            sample_size = int(2.0 * ratio * self.num_sample_inout)
+            surface_points = None
+            for i in range(10):
+                sample_points, fid = trimesh.sample.sample_surface(mesh, int(5 * sample_size))
+                ptsh = np.matmul(np.concatenate([sample_points, np.ones((sample_points.shape[0],1))], 1), calib.T)[:, :3]
+                inbb = (ptsh[:, 0] >= -1) & (ptsh[:, 0] <= 1) & (ptsh[:, 1] >= -1) & \
+                        (ptsh[:, 1] <= 1) & (ptsh[:, 2] >= -1) & (ptsh[:, 2] <= 1)
+                x = (self.load_size * (0.5 * ptsh[:,0] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
+                y = (self.load_size * (0.5 * ptsh[:,1] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
+                idx = y * self.load_size + x
+                inmask = mask.reshape(-1)[idx] > 0
+                inmask = inmask & inbb
+                sample_points = sample_points[inmask]
+                if surface_points is None:
+                    surface_points = sample_points
+                else:
+                    surface_points = np.concatenate([surface_points, sample_points], 0)
+                if surface_points.shape[0] >= sample_size:
+                    surface_points = surface_points[:sample_size]
+                    break
+                if i == 9:
+                    raise IOError('failed surface point sampling')
+            # surface_points, fid = trimesh.sample.sample_surface(mesh, int(4.0 * ratio * self.num_sample_inout))
             theta = 2.0 * math.pi * np.random.rand(surface_points.shape[0])
             phi = np.arccos(1 - 2 * np.random.rand(surface_points.shape[0]))
             x = np.sin(phi) * np.cos(theta)
@@ -280,7 +302,7 @@ class RPOtfDataset(RPDataset):
         elif 'uniform' in self.opt.sampling_mode:
             # add random points within image space
             random_points = np.concatenate(
-                [2.0 * np.random.rand(int(4.0*(1.0-ratio)*self.num_sample_inout), 3) - 1.0, np.ones((int(4.0*(1.0-ratio)*self.num_sample_inout), 1))],
+                [2.0 * np.random.rand(int(2.0*(1.0-ratio)*self.num_sample_inout), 3) - 1.0, np.ones((int(2.0*(1.0-ratio)*self.num_sample_inout), 1))],
                 1)  # [-1,1]
             random_points = np.matmul(random_points, inv(calib).T)[:, :3]
             # length = self.B_MAX - self.B_MIN
