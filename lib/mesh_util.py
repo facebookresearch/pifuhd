@@ -56,6 +56,9 @@ def reconstruction(net, cuda, calib_tensor,
         trans_mat = np.matmul(calib_inv, mat)
         verts = np.matmul(trans_mat[:3, :3], verts.T) + trans_mat[:3, 3:4]
         verts = verts.T
+        # in case mesh has flip transformation
+        if np.linalg.det(trans_mat[:3, :3]) < 0.0:
+            faces = faces[:,::-1]
         return verts, faces, normals, values
     except:
         print('error cannot marching cubes')

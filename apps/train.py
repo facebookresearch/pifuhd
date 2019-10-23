@@ -106,11 +106,11 @@ def adjust_learning_rate(optimizer, epoch, lr, schedule, gamma):
     return lr
 
 def linear_anneal_sigma(opt, cur_iter, n_iter, interval=40000):
-    if cur_iter % interval == 0:
-        if n_iter > 1:
-            opt.sigma = (opt.sigma_min - opt.sigma_max) * cur_iter / float(n_iter - 1) + opt.sigma_max
-        else:
-            opt.sigma = opt.sigma_max
+    iter = interval * (cur_iter // interval)
+    if n_iter > 1:
+        opt.sigma = (opt.sigma_min - opt.sigma_max) * iter / float(n_iter - 1) + opt.sigma_max
+    else:
+        opt.sigma = opt.sigma_max
 
 def total_error(opt, errors, multi_gpu=False):
     # NOTE: in multi-GPU case, since forward returns errG with number of GPUs, we need to marge.
@@ -216,11 +216,12 @@ def calc_error(opt, net, cuda, dataset, num_tests, label=None, thresh=0.5):
         err.update(acc)     
         return err
         
-def train(opt, writer):
+def train(opt):
     # load checkpoints
     state_dict_path = None
     if opt.load_netG_checkpoint_path is not None:
         state_dict_path = opt.load_netG_checkpoint_path
+        opt.continue_train = True
     elif opt.continue_train and opt.resume_epoch < 0:
         state_dict_path = '%s/%s_train_latest' % (opt.checkpoints_path, opt.name)
         opt.resume_epoch = 0
@@ -239,7 +240,10 @@ def train(opt, writer):
             continue_train = opt.continue_train
             opt = state_dict['opt']
             opt.continue_train = continue_train
-            
+    elif state_dict_path is not None:
+        print('Error: unable to load checkpoint %s' % state_dict_path)
+
+    writer = SummaryWriter(log_dir="./logs/%s" % opt.name)            
     
     parser.print_options(opt)
 
@@ -443,12 +447,14 @@ def train(opt, writer):
                     set_eval()
                     print('generate mesh (train) ...')
                     random.seed(1)
+                    train_dataset.is_train = False
                     data_idxs = random.sample(list(range(len(train_dataset))), k=opt.num_gen_mesh_test)
                     for data_idx in tqdm(data_idxs):
                         train_data = train_dataset[data_idx]
                         save_path = '%s/%s/train_eval_epoch%d_%s_%d_%d.obj' % (
                             opt.results_path, opt.name, epoch, train_data['name'], train_data['vid'], train_data['pid'])
                         gen_mesh(opt.resolution, netG if not multi_gpu else netG.module, cuda, train_data, save_path, ls_thresh)
+                    train_dataset.is_train = True
 
                     print('generate mesh (test) ...')
                     random.seed(1)
@@ -472,8 +478,7 @@ def train(opt, writer):
 
 def trainerWrapper(args=None):
     opt = parser.parse(args)
-    writer = SummaryWriter(log_dir="./logs/%s" % opt.name)
-    train(opt, writer)
+    train(opt)
 
 if __name__ == '__main__':
     trainerWrapper()
