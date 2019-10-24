@@ -16,6 +16,7 @@ from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib
+from numpy.linalg import inv
 
 from lib.options import BaseOptions
 from lib.visualizer import Visualizer
@@ -106,6 +107,10 @@ def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True, compo
         verts, faces, _, _ = reconstruction(
             net, cuda, calib_tensor, res, b_min, b_max, thresh, use_octree=use_octree, num_samples=100000)
         verts_tensor = torch.from_numpy(verts.T).unsqueeze(0).to(device=cuda).float()
+        if 'calib_world' in data:
+            calib_world = data['calib_world'].numpy()[0]
+            verts = np.matmul(np.concatenate([verts, np.ones_like(verts[:,:1])],1), inv(calib_world).T)[:,:3]
+
         # if not components:
         #     net.calc_normal(verts_tensor, calib_tensor[:1])
         #     color = net.nmls.detach().cpu().numpy()[0].T
@@ -140,13 +145,11 @@ def recon(opt):
             print('Warning: opt is overwritten.')
             dataroot = opt.dataroot
             resolution = opt.resolution
-            no_numel_eval = opt.no_numel_eval
-            no_mesh_recon = opt.no_mesh_recon
+            results_path = opt.results_path
             opt = state_dict['opt']
             opt.dataroot = dataroot
             opt.resolution = resolution
-            opt.no_numel_eval = no_numel_eval
-            opt.no_mesh_recon = no_mesh_recon
+            opt.results_path = results_path
     else:
         raise Exception('failed loading state dict!', state_dict_path)
     
@@ -154,7 +157,8 @@ def recon(opt):
 
     cuda = torch.device('cuda:%d' % opt.gpu_id)
 
-    test_dataset = EvalDataset(opt)
+    # test_dataset = EvalDataset(opt)
+    test_dataset = EvalWPoseDataset(opt)
 
     print('test data size: ', len(test_dataset))
     projection_mode = test_dataset.projection_mode

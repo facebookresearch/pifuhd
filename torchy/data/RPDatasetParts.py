@@ -59,7 +59,7 @@ def crop_image(img, rect):
     return new_img[y:(y+h),x:(x+w),:]
 
 def face_crop(pts):
-    flag = pts[:,2] > 0.2
+    flag = pts[:,2] > 0.5
 
     mshoulder = pts[1,:2]
     rear = pts[18,:2]
@@ -100,23 +100,29 @@ def face_crop(pts):
     return (x1, y1, x2-x1, y2-y1)
 
 def upperbody_crop(pts):
-    mshoulder = pts[1,:2]
-    nflag = pts[0,2] > 0.2
-    lflag = pts[17,2] > 0.2
-    rflag = pts[18,2] > 0.2
+    flag = pts[:,2] > 0.5
 
-    rear = pts[18,:2]
-    lear = pts[17,:2]
-    top = pts[0,:2]
-    if not nflag and lflag and rflag:
-        top = 0.5 * (rear + lear)
-    elif lflag:
-        top = lear
-    elif rflag:
-        top = rear
+    mshoulder = pts[1,:2]
+    ps = []
+    pts_id = [8]
+    for i in pts_id:
+        if flag[i]:
+            ps.append(pts[i,:2])
 
     center = mshoulder
-    radius = int(2.5*np.sqrt(((center - top)**2).sum(0)))
+    if len(ps) == 1:
+        ps = np.stack(ps, 0)
+        radius = int(0.8*np.max(np.sqrt(((ps - center[None,:])**2).reshape(-1,2).sum(1))))
+    else:
+        ps = []
+        pts_id = [0, 2, 5]
+        ratio = [0.4, 0.3, 0.3]
+        for i in pts_id:
+            if flag[i]:
+                ps.append(pts[i,:2])
+        ps = np.stack(ps, 0)
+        radius = int(0.8*np.max(np.sqrt(((ps - center[None,:])**2).reshape(-1,2).sum(1)) / np.array(ratio)))
+
     center = center.astype(np.int)
 
     x1 = center[0] - radius
@@ -155,7 +161,7 @@ def upperbody_crop(pts):
 #     return (x1, y1, x2-x1, y2-y1)
 
 def fullbody_crop(pts):
-    pts = pts[pts[:,2] > 0.2]
+    pts = pts[pts[:,2] > 0.5]
     pmax = pts.max(0)
     pmin = pts.min(0)
 
@@ -314,9 +320,11 @@ class RPDatasetParts(Dataset):
                 data = json.load(json_file)['people'][0]
                 keypoints = np.array(data['pose_keypoints_2d']).reshape(-1,3)
 
-                nflag = keypoints[0,2] > 0.2
-                lflag = keypoints[17,2] > 0.2
-                rflag = keypoints[18,2] > 0.2
+                flags = keypoints[:,2] > 0.5
+
+                nflag = flags[0]
+                lflag = flags[17]
+                rflag = flags[18]
                 if self.opt.crop_type != 'fullbody' and (not nflag or not (lflag | rflag)):
                     raise IOError('face should be front')
 
@@ -459,7 +467,6 @@ class RPDatasetParts(Dataset):
                     blur = GaussianBlur(np.random.uniform(0, self.opt.aug_blur))
                     render = render.filter(blur)
 
-
             # intrinsic = np.matmul(trans_intrinsic, np.matmul(ndc_intrinsic, scale_intrinsic))
             calib = torch.Tensor(np.matmul(intrinsic, extrinsic)).float()
             extrinsic = torch.Tensor(extrinsic).float()
@@ -486,6 +493,7 @@ class RPDatasetParts(Dataset):
             'calib': torch.stack(calib_list, dim=0),
             'extrinsic': torch.stack(extrinsic_list, dim=0),
             'mask': torch.stack(mask_list, dim=0),
+            'files': file_list
         }
 
     def get_sample(self, subject, calib, mask=None):
@@ -706,10 +714,10 @@ class RPDatasetParts(Dataset):
             # pts = 512*(0.5*p[sample_data['labels'].numpy().reshape(-1) == 1.0]+0.5)
             # for p in pts:
             #     mask = cv2.circle(mask, (int(p[0]),int(p[1])), 2, (0,255.0,0), -1)
-            # mask = cv2.putText(mask, render_data['name'][0], (5, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 0, 0), lineType=cv2.LINE_AA) 
+            # mask = cv2.putText(mask, render_data['files'][0], (5, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 0, 0), lineType=cv2.LINE_AA) 
             # cv2.imshow('tmp.img', mask)
             # exit()
-            # cv2.waitKey(10)
+            # cv2.waitKey(1000)
             res.update(render_data)
             res.update(sample_data)
             if self.num_sample_normal:

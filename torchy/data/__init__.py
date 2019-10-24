@@ -1,3 +1,4 @@
+from .EvalWPoseDataset import EvalWPoseDataset
 from .EvalDataset import EvalDataset
 from .RPDataset import RPDataset
 from .RPDatasetParts import RPDatasetParts
