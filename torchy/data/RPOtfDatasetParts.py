@@ -170,10 +170,21 @@ class RPOtfDatasetParts(RPDataset):
         sample_points = sample_points[inbb]
         sample_points = sample_points[:self.opt.num_sample_surface]
 
-        if sample_points.shape[0] != self.opt.num_sample_surface:# + int(self.opt.uniform_ratio * self.num_sample_inout):
+        if sample_points.shape[0] != self.opt.num_sample_surface:
+            ptshh = np.matmul(np.concatenate([sample_points, np.ones((sample_points.shape[0],1))], 1), calib.T)[:, :3]
+            x = (self.load_size * (0.5 * ptshh[:,0] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
+            y = (self.load_size * (0.5 * ptshh[:,1] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
+
+            img = 255.0*np.stack(3*[mask[0]],2)
+            for p in np.stack([x,y],1):
+                img = cv2.circle(img, (int(p[0]),int(p[1])), 2, (0,255.0,0), -1)
+            img = cv2.putText(img, subject, (5, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 0, 0), lineType=cv2.LINE_AA) 
+            cv2.imwrite('tmp/%s.png' % subject, img)
+
             raise IOError('unable to sample sufficient number of points %s' % subject)
 
         inside = mesh.contains(sample_points)
+
 
         ptsh = ptsh[inbb][:self.opt.num_sample_surface]
         x = (self.load_size * (0.5 * ptsh[:,0] + 0.5)).astype(np.int32).clip(0, self.load_size-1)

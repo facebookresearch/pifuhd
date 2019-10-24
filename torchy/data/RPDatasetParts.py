@@ -126,6 +126,34 @@ def upperbody_crop(pts):
 
     return (x1, y1, x2-x1, y2-y1)
 
+# def upperbody_crop(pts):
+#     mshoulder = pts[1,:2]
+#     nflag = pts[0,2] > 0.2
+#     lflag = pts[17,2] > 0.2
+#     rflag = pts[18,2] > 0.2
+
+#     rear = pts[18,:2]
+#     lear = pts[17,:2]
+#     top = pts[0,:2]
+#     if not nflag and lflag and rflag:
+#         top = 0.5 * (rear + lear)
+#     elif lflag:
+#         top = lear
+#     elif rflag:
+#         top = rear
+
+
+#     center = mshoulder
+#     radius = int(2.5*np.sqrt(((center - top)**2).sum(0)))
+#     center = center.astype(np.int)
+
+#     x1 = center[0] - radius
+#     x2 = center[0] + radius
+#     y1 = center[1] - radius
+#     y2 = center[1] + radius
+
+#     return (x1, y1, x2-x1, y2-y1)
+
 def fullbody_crop(pts):
     pts = pts[pts[:,2] > 0.2]
     pmax = pts.max(0)
