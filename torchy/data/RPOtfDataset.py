@@ -275,11 +275,11 @@ class RPOtfDataset(RPDataset):
             arm_idx = [[5,6,0.0,1.0],[6,7,0.0,1.2],[2,3,0.0,1.0],[3,4,0.0,1.2]]
             points = []
             for idx in arm_idx:
-                points.append(sample_around_linesegment(poses[idx[0]], poses[idx[1]], 20.0, self.num_sample_inout//2, idx[2], idx[3]))
+                points.append(sample_around_linesegment(poses[idx[0]], poses[idx[1]], 20.0, self.num_sample_inout//4, idx[2], idx[3]))
             points.append(sample_points)
             sample_points = np.concatenate(points, 0)
         if 'face' in self.opt.sampling_mode:
-            points = sample_around_point(poses[0], 10.0, self.num_sample_inout//4)
+            points = sample_around_point(poses[0], 10.0, self.num_sample_inout//8)
             sample_points = np.concatenate([sample_points, points], 0)
         if mask is not None and 'mask' in self.opt.sampling_mode:
             ptsh = np.matmul(np.concatenate([sample_points, np.ones((sample_points.shape[0],1))], 1), calib.T)[:, :3]
@@ -289,7 +289,7 @@ class RPOtfDataset(RPDataset):
             inmask = mask.reshape(-1)[idx] > 0
             points_inmask = sample_points[inmask]
             points_outmask = sample_points[np.logical_not(inmask)]
-            out_idxs = np.random.randint(0,points_outmask.shape[0],size=(points_outmask.shape[0]//8))
+            out_idxs = np.random.randint(0,points_outmask.shape[0],size=(int(self.opt.mask_ratio*points_outmask.shape[0])))
             sample_points = np.concatenate([points_inmask, points_outmask[out_idxs]], 0)
         if self.opt.sampling_mode == 'uniform':
             # add random points within image space
@@ -336,7 +336,7 @@ class RPOtfDataset(RPDataset):
         #                 :self.num_sample_inout // 2] if nin > self.num_sample_inout // 2 else inside_points
         # outside_points = outside_points[
         #                  :self.num_sample_inout // 2] if nin > self.num_sample_inout // 2 else outside_points[
-        #                      :(self.num_sample_inout - nin)]    
+        #                      :(self.num_sample_inout - nin)]
         samples = np.concatenate([inside_points, outside_points], 0).T # [3, N]
         labels = np.concatenate([np.ones((1, inside_points.shape[0])), np.zeros((1, outside_points.shape[0]))], 1)
         ratio = outside_points.shape[0]/samples.shape[0]

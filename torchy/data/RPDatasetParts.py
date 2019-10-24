@@ -458,13 +458,12 @@ class RPDatasetParts(Dataset):
             'calib': torch.stack(calib_list, dim=0),
             'extrinsic': torch.stack(extrinsic_list, dim=0),
             'mask': torch.stack(mask_list, dim=0),
-            'name': file_list
         }
 
     def get_sample(self, subject, calib, mask=None):
-        return self.load_points_sample(subject, calib, mask)
+        return self.load_points_sample(subject, calib, mask, self.opt.sigma)
     
-    def load_points_sample(self, subject, calib, mask, num_files=100):
+    def load_points_sample(self, subject, calib, mask, sigma, num_files=100):
         '''
         load points from precomputed numpy array
         inside/outside points are stored with %05d.in.xyz and %05d.ou.xyz 
@@ -479,8 +478,6 @@ class RPDatasetParts(Dataset):
             random.seed(1991)
             np.random.seed(1991)
             sigma = 20.0
-        else:
-            sigma = self.opt.sigma
 
         SAMPLE_DIR = os.path.join(self.SAMPLE, subject)
 
@@ -521,20 +518,20 @@ class RPDatasetParts(Dataset):
         in_pts = pts[in_mask]
         out_pts = pts[out_mask]
 
-        rand_pts = np.concatenate(
-            [2.0 * np.random.rand(self.num_sample_inout, 3) - 1.0, np.ones((self.num_sample_inout, 1))],
-            1)  # [-1,1]
-        x = (self.load_size * (0.5 * rand_pts[:,0] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
-        y = (self.load_size * (0.5 * rand_pts[:,1] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
-        idx = y * self.load_size + x
-        inmask = mask.reshape(-1)[idx] > 0.0
-        rand_pts = np.matmul(rand_pts, inv(calib).T)[:, :3]
+        # rand_pts = np.concatenate(
+        #     [2.0 * np.random.rand(self.num_sample_inout, 3) - 1.0, np.ones((self.num_sample_inout, 1))],
+        #     1)  # [-1,1]
+        # x = (self.load_size * (0.5 * rand_pts[:,0] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
+        # y = (self.load_size * (0.5 * rand_pts[:,1] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
+        # idx = y * self.load_size + x
+        # inmask = mask.reshape(-1)[idx] > 0.0
+        # rand_pts = np.matmul(rand_pts, inv(calib).T)[:, :3]
 
-        in_max = in_pts.max(0) + 5.0
-        in_min = in_pts.min(0) - 5.0
-        bbox_in = np.logical_and(np.logical_and(inmask, rand_pts[:,2] < in_max[2]), rand_pts[:,2] > in_min[2])
-        rand_pts = rand_pts[np.logical_not(bbox_in)][:int(self.opt.uniform_ratio*self.num_sample_inout)]
-        out_pts = np.concatenate([out_pts, rand_pts], 0)
+        # in_max = in_pts.max(0) + 5.0
+        # in_min = in_pts.min(0) - 5.0
+        # bbox_in = np.logical_and(np.logical_and(inmask, rand_pts[:,2] < in_max[2]), rand_pts[:,2] > in_min[2])
+        # rand_pts = rand_pts[np.logical_not(bbox_in)][:int(self.opt.uniform_ratio*self.num_sample_inout)]
+        # out_pts = np.concatenate([out_pts, rand_pts], 0)
 
         samples = np.concatenate([in_pts, out_pts], 0)
         labels = np.concatenate([np.ones((in_pts.shape[0], 1)), np.zeros((out_pts.shape[0], 1))], 0)
@@ -543,7 +540,7 @@ class RPDatasetParts(Dataset):
         if ratio > 0.99:
             raise IOError('invalid data sample')
 
-        if samples.shape[0] != self.opt.num_sample_inout + int(self.opt.uniform_ratio * self.num_sample_inout):
+        if samples.shape[0] != self.opt.num_sample_inout:# + int(self.opt.uniform_ratio * self.num_sample_inout):
             raise IOError('unable to sample sufficient number of points')
 
         samples = torch.Tensor(samples.T).float()
