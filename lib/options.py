@@ -82,7 +82,7 @@ class BaseOptions():
                              help='instance normalization or batch normalization or group normalization')
 
         # Image filter General
-        g_model.add_argument('--netG', type=str, default='hgpifu', help='piximp | fanimp')
+        g_model.add_argument('--netG', type=str, default='hgpifu', help='piximp | fanimp | hghpifu')
 
         # hgimp specific
         g_model.add_argument('--n_pixshuffle', type=int, default=1, help='pixel shuffle')
@@ -108,6 +108,7 @@ class BaseOptions():
                              help='# of dimensions of mlp. no need to put the first channel')
         g_model.add_argument('--mlp_res_layers', nargs='+', default=[2,3,4], type=int,
                              help='leyers that has skip connection. use 0 for no residual pass')
+        g_model.add_argument('--merge_layer', type=int, default=-1)
         g_model.add_argument('--use_compose', action='store_true', help='use multi part composition')
 
         # for train

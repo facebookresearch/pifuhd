@@ -5,11 +5,11 @@ import torch.nn.functional as F
 from .BasePIFuNet import BasePIFuNet
 from .MLP import MLP
 from .DepthNormalizer import DepthNormalizer
-from .HGFilters import *
 from .VolumetricEncoder import *
+from .HGFilters_PoC import *
 from ..net_util import init_net
 
-class HGPIFuNet(BasePIFuNet):
+class HGHPIFuNet(BasePIFuNet):
     '''
     HGPIFu uses stacked hourglass as an image encoder.
     '''
@@ -19,7 +19,7 @@ class HGPIFuNet(BasePIFuNet):
                  projection_mode='orthogonal',
                  criteria={'occ': nn.MSELoss()}
                  ):
-        super(HGPIFuNet, self).__init__(
+        super(HGHPIFuNet, self).__init__(
             projection_mode=projection_mode,
             criteria=criteria)
 
@@ -27,11 +27,21 @@ class HGPIFuNet(BasePIFuNet):
 
         self.opt = opt
         self.num_views = self.opt.num_views
-        self.image_filter = HGFilter(opt.num_stack, opt.hg_depth, opt.hg_dim, 
+        self.image_filter = HGHFilter(opt.num_stack, opt.hg_depth, opt.hg_dim, 32,
                                      opt.norm, opt.hg_down, False, opt.hg_use_attention, opt.n_pixshuffle)
 
         self.mlp = MLP(
             filter_channels=self.opt.mlp_dim,
+            merge_layer=self.opt.merge_layer,
+            num_views=self.num_views,
+            res_layers=self.opt.mlp_res_layers,
+            norm=self.opt.mlp_norm,
+            last_op=nn.Sigmoid(),
+            compose=self.opt.use_compose)
+
+        second_mlp = [self.opt.mlp_dim[self.opt.merge_layer+1] + 32] + self.opt.mlp_dim[1:]
+        self.mlp2 = MLP(
+            filter_channels=second_mlp,
             num_views=self.num_views,
             res_layers=self.opt.mlp_res_layers,
             norm=self.opt.mlp_norm,
@@ -108,6 +118,7 @@ class HGPIFuNet(BasePIFuNet):
 
         self.intermediate_preds_list = []
 
+        phi = None
         for i, im_feat in enumerate(self.im_feat_list):
 
             if self.opt.sp_enc_type == 'vol' and self.opt.sp_no_pifu:
@@ -116,13 +127,15 @@ class HGPIFuNet(BasePIFuNet):
             #     point_local_feat_list = [F.normalize(self.index(im_feat, xy),dim=1,eps=1e-8), sp_feat]            
             #     point_local_feat = torch.cat(point_local_feat_list, 1)
             else:
-                point_local_feat_list = [self.index(im_feat, xy), sp_feat]       
+                point_local_feat_list = [self.index(im_feat, xy), sp_feat]            
                 point_local_feat = torch.cat(point_local_feat_list, 1)
-            pred = in_bb * self.mlp(point_local_feat)[0]
+            pred, phi = self.mlp(point_local_feat)
+            pred = in_bb * pred
 
             self.intermediate_preds_list.append(pred)
-        
-        self.preds = self.intermediate_preds_list[-1]
+
+        point_local_feat_h = torch.cat([self.index(self.normx, xy), phi.detach()], 1)
+        self.preds = self.mlp2(point_local_feat_h)[0]
 
     def calc_normal(self, points, calibs, transforms=None, labels=None, delta=0.01, fd_type='forward'):
         '''
@@ -242,8 +255,8 @@ class HGPIFuNet(BasePIFuNet):
         error['Err(occ)'] = 0
         for preds in self.intermediate_preds_list:
             error['Err(occ)'] += self.criteria['occ'](preds, self.labels, gamma)
-        
-        error['Err(occ)'] /= len(self.intermediate_preds_list)
+        error['Err(occ)'] += self.criteria['occ'](self.preds, self.labels, gamma)        
+        error['Err(occ)'] /= len(self.intermediate_preds_list)+1
         
         if self.nmls is not None and self.labels_nml is not None:
             error['Err(nml)'] = self.criteria['nml'](self.nmls, self.labels_nml)

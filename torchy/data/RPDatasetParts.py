@@ -59,7 +59,7 @@ def crop_image(img, rect):
     return new_img[y:(y+h),x:(x+w),:]
 
 def face_crop(pts):
-    flag = pts[:,2] > 0.5
+    flag = pts[:,2] > 0.2
 
     mshoulder = pts[1,:2]
     rear = pts[18,:2]
@@ -100,7 +100,7 @@ def face_crop(pts):
     return (x1, y1, x2-x1, y2-y1)
 
 def upperbody_crop(pts):
-    flag = pts[:,2] > 0.5
+    flag = pts[:,2] > 0.2
 
     mshoulder = pts[1,:2]
     ps = []
@@ -161,7 +161,7 @@ def upperbody_crop(pts):
 #     return (x1, y1, x2-x1, y2-y1)
 
 def fullbody_crop(pts):
-    pts = pts[pts[:,2] > 0.5]
+    pts = pts[pts[:,2] > 0.2]
     pmax = pts.max(0)
     pmin = pts.min(0)
 
@@ -323,10 +323,17 @@ class RPDatasetParts(Dataset):
                 flags = keypoints[:,2] > 0.5
 
                 nflag = flags[0]
-                lflag = flags[17]
-                rflag = flags[18]
-                if self.opt.crop_type != 'fullbody' and (not nflag or not (lflag | rflag)):
+                mflag = flags[1]
+
+                check_id = [2, 5, 15, 16, 17, 18]
+                cnt = sum(flags[check_id])
+                if self.opt.crop_type == 'face' and (not (nflag and cnt > 3)):
                     raise IOError('face should be front')
+                if self.opt.crop_type == 'upperbody' and (not (mflag and nflag and cnt > 3)):
+                    raise IOError('face should be front')
+                if self.opt.crop_type == 'fullbody' and sum(flags) < 15:
+                    raise IOError('sufficient keypoints are not detected')
+                
 
             # load calibration data
             param = np.load(param_path, allow_pickle=True)

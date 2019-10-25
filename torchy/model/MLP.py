@@ -50,6 +50,7 @@ class MLP(nn.Module):
         '''
         y = feature
         tmpy = feature
+        phi = None
         for i, f in enumerate(self.filters):
             y = f(
                 y if i not in self.res_layers
@@ -67,6 +68,8 @@ class MLP(nn.Module):
                 tmpy = feature.view(
                     -1, self.num_views, *feature.size()[1:]
                 ).mean(dim=1)
+            if self.num_views == 1 and i == self.merge_layer:
+                phi = y.clone()
 
         if self.last_op is not None:
             y = self.last_op(y)
@@ -75,7 +78,7 @@ class MLP(nn.Module):
             self.y_nways = y
             y = y.max(dim=1, keepdim=True)[0]
 
-        return y
+        return y, phi
 
 class ResBlock(nn.Module):
     def __init__(self, in_ch):

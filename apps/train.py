@@ -297,7 +297,10 @@ def train(opt):
     else:
         raise NameError('unknown loss type %s' % opt.nml_loss_type)
     
-    netG = HGPIFuNet(opt, projection_mode, criteria)
+    if opt.netG == 'hghpifu':
+        netG = HGHPIFuNet(opt, projection_mode, criteria)
+    else:
+        netG = HGPIFuNet(opt, projection_mode, criteria)
     lr = opt.learning_rate
     
     def set_train():
