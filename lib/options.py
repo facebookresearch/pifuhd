@@ -83,6 +83,7 @@ class BaseOptions():
 
         # Image filter General
         g_model.add_argument('--netG', type=str, default='hgpifu', help='piximp | fanimp | hghpifu')
+        g_model.add_argument('--netC', type=str, default='resblkpifu', help='resblkpifu | resblkhpifu')
 
         # hgimp specific
         g_model.add_argument('--n_pixshuffle', type=int, default=1, help='pixel shuffle')
@@ -106,6 +107,8 @@ class BaseOptions():
         g_model.add_argument('--mlp_norm', type=str, default='group', help='normalization for volume branch')
         g_model.add_argument('--mlp_dim', nargs='+', default=[1024, 512, 256, 128, 1], type=int,
                              help='# of dimensions of mlp. no need to put the first channel')
+        g_model.add_argument('--mlp_dim_color', nargs='+', default=[1024, 512, 256, 128, 3], type=int,
+                             help='# of dimensions of mlp. no need to put the first channel')
         g_model.add_argument('--mlp_res_layers', nargs='+', default=[2,3,4], type=int,
                              help='leyers that has skip connection. use 0 for no residual pass')
         g_model.add_argument('--merge_layer', type=int, default=-1)
@@ -125,6 +128,7 @@ class BaseOptions():
         parser.add_argument('--lambda_nml', type=float, default=0.0, help='weight of normal loss')
         parser.add_argument('--lambda_cmp_l1', type=float, default=0.0, help='weight of normal loss')
         parser.add_argument('--occ_loss_type', type=str, default='mse', help='bce | brock_bce | mse')
+        parser.add_argument('--clr_loss_type', type=str, default='mse', help='mse | l1')
         parser.add_argument('--nml_loss_type', type=str, default='mse', help='mse | l1')
         parser.add_argument('--occ_gamma', type=float, default=None, help='weighting term')
         parser.add_argument('--no_finetune', action='store_true', help='fine tuning netG in training C')
@@ -140,6 +144,7 @@ class BaseOptions():
 
         # path
         parser.add_argument('--load_netG_checkpoint_path', type=str, help='path to save checkpoints')
+        parser.add_argument('--load_netC_checkpoint_path', type=str, help='path to save checkpoints')
         parser.add_argument('--checkpoints_path', type=str, default='./checkpoints', help='path to save checkpoints')
         parser.add_argument('--results_path', type=str, default='./results', help='path to save results ply')
         parser.add_argument('--load_checkpoint_path', type=str, help='path to save results ply')
@@ -207,7 +212,13 @@ class BaseOptions():
                 (opt.name, opt.norm, opt.num_stack, opt.hg_depth, opt.hg_dim, \
                  int(opt.random_bg), opt.sigma_min, opt.sigma_max)
             opt.mlp_dim = [opt.hg_dim + 1] + opt.mlp_dim
-        
+            
+
+        if opt.netC == 'resblkhpifu':
+            opt.mlp_dim_color = [256 + opt.mlp_dim[opt.merge_layer+1]] + opt.mlp_dim_color
+            print(opt.mlp_dim_color)
+        else:
+            opt.mlp_dim_color = [256 + opt.hg_dim + 1] + opt.mlp_dim_color
         # deprecated(09/25)
         # if opt.sp_enc_type == 'vol':
         #     opt.name = '%s_p%d.%d_%s%d_np%d_s%1.f.%1.f' % (opt.name, opt.mean_pitch, opt.max_pitch, opt.vol_net, opt.vol_ch, int(opt.sp_no_pifu), opt.sigma_min, opt.sigma_max)

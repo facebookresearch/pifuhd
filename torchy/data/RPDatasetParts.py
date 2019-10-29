@@ -403,7 +403,7 @@ class RPDatasetParts(Dataset):
                 
             tw, th = self.load_size, self.load_size
             dx, dy = 0, 0
-            if self.phase == 'train' and self.num_views < 2:
+            if self.is_train and self.num_views < 2:
                 # pad images
                 w, h = render.size
 
@@ -466,7 +466,7 @@ class RPDatasetParts(Dataset):
 
             render = Image.composite(render, bg, mask)
 
-            if self.phase == 'train' and self.num_views < 2:
+            if self.is_train and self.num_views < 2:
                 # image augmentation
                 render = self.aug_trans(render)
 
@@ -639,11 +639,14 @@ class RPDatasetParts(Dataset):
             'labels_nml': normals
         }
 
-    def get_color_sampling(self, subject, vid, pitch=0):
-        uv_render_path = os.path.join(self.UV_RENDER, subject, '%d_%d_%02d.png' % (vid, pitch, 0))
-        uv_mask_path = os.path.join(self.UV_MASK, subject, '%d_%d_%02d.png' % (vid, pitch, 0)) 
+    def get_color_sampling(self, subject, calib, vid, pid=0):
+        view_id = self.yaw_list[vid]
+        pitch = self.pitch_list[pid]
+
+        uv_render_path = os.path.join(self.UV_RENDER, subject, '%d_%d_%02d.jpg' % (view_id, pitch, 0))
         uv_pos_path = os.path.join(self.UV_POS, subject, '%02d.exr' % (0))
         uv_normal_path = os.path.join(self.UV_NORMAL, subject, '%02d.png' % (0))
+        uv_mask_path = os.path.join(self.UV_MASK, subject, '%02d.png' % (0)) 
 
         # segmentation mask for the uv render
         uv_mask = cv2.imread(uv_mask_path)
@@ -668,8 +671,16 @@ class RPDatasetParts(Dataset):
         surface_normals = uv_normal[uv_mask].T
         surface_colors= uv_render[uv_mask].T
 
+        ptsh = np.matmul(np.concatenate([surface_points.T, np.ones((surface_points.shape[1],1))], 1), calib.T)[:, :3]
+
+        inbb = (ptsh[:, 0] >= -1) & (ptsh[:, 0] <= 1) & (ptsh[:, 1] >= -1) & \
+               (ptsh[:, 1] <= 1) & (ptsh[:, 2] >= -1) & (ptsh[:, 2] <= 1)
+        surface_points = surface_points[:,inbb]
+        surface_normals = surface_normals[:,inbb]
+        surface_colors = surface_colors[:,inbb]
+
         if self.num_sample_color:
-            sample_list = random.sample(range(0, surface_points.shape[0] - 1), self.num_sample_color)
+            sample_list = random.sample(range(0, surface_points.shape[1] - 1), self.num_sample_color)
             surface_points = surface_points[:,sample_list]
             surface_normals = surface_normals[:,sample_list]
             surface_colors = surface_colors[:,sample_list]
@@ -712,7 +723,10 @@ class RPDatasetParts(Dataset):
             }
             render_data = self.get_render(sid, num_views=self.num_views, view_id=vid,
                                         pid=pid, random_sample=self.opt.random_multiview)
-            sample_data = self.get_sample(subject, render_data['calib'][0].numpy(), render_data['mask'][0].numpy())        
+            res.update(render_data)
+            if not self.num_sample_color:
+                sample_data = self.get_sample(subject, render_data['calib'][0].numpy(), render_data['mask'][0].numpy())        
+                res.update(sample_data)
             # p = sample_data['samples'].t().numpy()
             # calib = render_data['calib'][0].numpy()
             # mask = (255.0*(0.5*render_data['img'][0].permute(1,2,0).numpy()[:,:,::-1]+0.5)).astype(np.uint8)
@@ -725,14 +739,14 @@ class RPDatasetParts(Dataset):
             # cv2.imshow('tmp.img', mask)
             # exit()
             # cv2.waitKey(1000)
-            res.update(render_data)
-            res.update(sample_data)
+            
+            
             if self.num_sample_normal:
                 normal_data = self.get_normal_sampling(subject, render_data['calib'][0].numpy())
                 res.update(normal_data)
             if self.num_sample_color:
-                color_data = self.get_color_sampling(subject, view_id=vid)
-                res.upate(color_data)
+                color_data = self.get_color_sampling(subject, render_data['calib'][0].numpy(), vid=vid)
+                res.update(color_data)
             return res
         except Exception as e:
             for i in range(10):

@@ -58,6 +58,7 @@ class HGHPIFuNet(BasePIFuNet):
         self.im_feat_list = []
         self.tmpx = None
         self.normx = None
+        self.phi = None
 
         self.intermediate_preds_list = []
 
@@ -134,6 +135,7 @@ class HGHPIFuNet(BasePIFuNet):
 
             self.intermediate_preds_list.append(pred)
 
+        self.phi = phi
         point_local_feat_h = torch.cat([self.index(self.normx, xy), phi.detach()], 1)
         self.preds = self.mlp2(point_local_feat_h)[0]
 
