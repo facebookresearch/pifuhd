@@ -32,6 +32,7 @@ class HGPIFuNet(BasePIFuNet):
 
         self.mlp = MLP(
             filter_channels=self.opt.mlp_dim,
+            merge_layer=self.opt.merge_layer,
             num_views=self.num_views,
             res_layers=self.opt.mlp_res_layers,
             norm=self.opt.mlp_norm,
@@ -48,6 +49,7 @@ class HGPIFuNet(BasePIFuNet):
         self.im_feat_list = []
         self.tmpx = None
         self.normx = None
+        self.phi = None
 
         self.intermediate_preds_list = []
 
@@ -108,6 +110,7 @@ class HGPIFuNet(BasePIFuNet):
 
         self.intermediate_preds_list = []
 
+        phi = None
         for i, im_feat in enumerate(self.im_feat_list):
 
             if self.opt.sp_enc_type == 'vol' and self.opt.sp_no_pifu:
@@ -118,10 +121,12 @@ class HGPIFuNet(BasePIFuNet):
             else:
                 point_local_feat_list = [self.index(im_feat, xy), sp_feat]       
                 point_local_feat = torch.cat(point_local_feat_list, 1)
-            pred = in_bb * self.mlp(point_local_feat)[0]
+            pred, phi = self.mlp(point_local_feat)
+            pred = in_bb * pred
 
             self.intermediate_preds_list.append(pred)
         
+        self.phi = phi
         self.preds = self.intermediate_preds_list[-1]
 
     def calc_normal(self, points, calibs, transforms=None, labels=None, delta=0.01, fd_type='forward'):

@@ -9,13 +9,13 @@ from ..net_util import *
 
 from ..geometry import index, orthogonal, perspective
 
-class ResBlkPIFuNet(BasePIFuNet):
+class ResBlkHPIFuNet(BasePIFuNet):
     def __init__(self,
                  opt,
                  netG,
                  projection_mode='orthogonal',
                  criteria={'clr': nn.MSELoss()}):
-        super(ResBlkPIFuNet, self).__init__(
+        super(ResBlkHPIFuNet, self).__init__(
             projection_mode=projection_mode,
             criteria=criteria)
 
@@ -33,14 +33,17 @@ class ResBlkPIFuNet(BasePIFuNet):
             norm=self.opt.mlp_norm,
             last_op=nn.Tanh(),
             compose=False)
-        
+
         self.normalizer = DepthNormalizer(opt)
 
         init_net(self)
 
         self.netG = netG
 
-    def filter(self, images, with_netG=True):
+        for p in self.netG.parameters():
+            p.requires_grad=False
+
+    def filter(self, images, with_netG=False):
         '''
         apply a fully convolutional network to images.
         the resulting feature will be stored.
@@ -50,8 +53,6 @@ class ResBlkPIFuNet(BasePIFuNet):
         if with_netG:
             self.netG.filter(images)
         self.im_feat = self.image_filter(images)
-
-        self.im_feat = torch.cat([self.netG.get_im_feat().detach(), self.im_feat], 1)
     
     def query(self, points, calibs, transforms=None, labels=None):
         '''
@@ -72,7 +73,8 @@ class ResBlkPIFuNet(BasePIFuNet):
         xyz = self.projection(points, calibs, transforms)
         xy = xyz[:, :2, :]
 
-        z_feat = self.normalizer(xyz)
+        self.netG.query(points=points, calibs=calibs)
+        z_feat = self.netG.phi.detach()
         point_local_feat_list = [self.index(self.im_feat, xy), z_feat]
 
         point_local_feat = torch.cat(point_local_feat_list, 1)
