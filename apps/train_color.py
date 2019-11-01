@@ -90,15 +90,15 @@ def gen_mesh(res, netC, cuda, data, save_path, thresh=0.5, use_octree=True):
 
         color = np.zeros(verts.shape)
         interval = 100000
-        for i in range(len(color) // interval):
+        for i in range(len(color) // interval + 1):
             left = i * interval
-            right = i * interval + interval
-            if i == len(color) // interval - 1:
+            if i == len(color) // interval:
                 right = -1
+            else:
+                right = (i + 1) * interval
             netC.query(verts_tensor[:, :, left:right], calib_tensor)
             rgb = netC.get_preds()[0].detach().cpu().numpy() * 0.5 + 0.5
             color[left:right] = rgb.T
-
         save_obj_mesh_with_color(save_path, verts, faces, color)
     except Exception as e:
         print('Can not create marching cubes at this time.', e)

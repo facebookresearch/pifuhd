@@ -466,7 +466,7 @@ class RPDatasetParts(Dataset):
 
             render = Image.composite(render, bg, mask)
 
-            if self.is_train and self.num_views < 2:
+            if not self.num_sample_color and self.is_train and self.num_views < 2:
                 # image augmentation
                 render = self.aug_trans(render)
 
