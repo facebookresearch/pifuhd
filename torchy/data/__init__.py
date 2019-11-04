@@ -6,3 +6,4 @@ from .RPOtfDatasetParts import RPOtfDatasetParts
 from .RPOtfDataset import RPOtfDataset
 from .RPTSDFDataset import RPTSDFDataset
 from .FRLFaceDataset import FRLFaceDataset
+from .MixDataset import MixDataset

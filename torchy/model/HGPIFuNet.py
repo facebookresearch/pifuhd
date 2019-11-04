@@ -32,7 +32,7 @@ class HGPIFuNet(BasePIFuNet):
 
         self.mlp = MLP(
             filter_channels=self.opt.mlp_dim,
-            merge_layer=self.opt.merge_layer,
+            # merge_layer=self.opt.merge_layer,
             num_views=self.num_views,
             res_layers=self.opt.mlp_res_layers,
             norm=self.opt.mlp_norm,

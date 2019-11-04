@@ -12,6 +12,8 @@ class BaseOptions():
         g_data.add_argument('--dataset', type=str, default='renderppl', help='dataset name')
         g_data.add_argument('--dataroot', type=str, default='./data',
                             help='path to images (data folder)')
+        g_data.add_argument('--dataroot_mix', type=str, default='./data',
+                            help='path to images (data folder)')
 
         g_data.add_argument('--loadSize', type=int, default=512, help='load size of input image')
 
@@ -22,6 +24,8 @@ class BaseOptions():
         g_exp.add_argument('--debug', action='store_true', help='debug mode or not')
         g_exp.add_argument('--mode', type=str, default='inout', help='inout || color')
         g_exp.add_argument('--use_tsdf', action='store_true', help='use tsdf instead of occupancy')
+        g_exp.add_argument('--use_mix', action='store_true', help='use mix dataset')
+        g_exp.add_argument('--mix_ratio', type=float, default=0.5, help='mix ratio of two datasets')
 
         g_exp.add_argument('--num_views', type=int, default=1, help='How many views to use for multiview network.')
         g_exp.add_argument('--random_multiview', action='store_true', help='Select random multiview combination.')

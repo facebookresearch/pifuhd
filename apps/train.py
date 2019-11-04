@@ -269,6 +269,19 @@ def train(opt):
 
     projection_mode = train_dataset.projection_mode
 
+    if opt.use_mix:
+        if opt.crop_type != 'face':
+            raise NameError('only face is supported now.')
+        dataroot = opt.dataroot
+        opt.dataroot = opt.dataroot_mix
+        train_dataset2 = FRLFaceDataset(opt, phase='train')
+        test_dataset2 = FRLFaceDataset(opt, phase='val')
+        print('frl data: %d (train), %d (test)' % (len(train_dataset2),len(test_dataset2)))
+        opt.dataroot = dataroot
+
+        train_dataset = MixDataset(train_dataset, train_dataset2, opt.mix_ratio, phase='train')
+        test_dataset = MixDataset(test_dataset, test_dataset2, phase='val')
+
     train_data_loader = DataLoader(train_dataset,
                                    batch_size=opt.batch_size, shuffle=not opt.serial_batches,
                                    num_workers=opt.num_threads, pin_memory=opt.pin_memory)

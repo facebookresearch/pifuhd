@@ -103,6 +103,7 @@ class FRLFaceDataset(Dataset):
         self.RENDER = os.path.join(self.root, 'RENDER')
         self.PARAM = os.path.join(self.root, 'PARAM')
         self.SAMPLE = os.path.join(self.root, 'GEO', 'SAMPLE')
+        self.OBJ = os.path.join(self.root, 'GEO', 'MESH')
         self.BG = os.path.join(self.root, 'BG')
         self.POSE2D = os.path.join(self.root, 'POSE2D', 'json')
         
@@ -395,11 +396,11 @@ class FRLFaceDataset(Dataset):
                (ptsh[:, 1] <= 1) & (ptsh[:, 2] >= -1) & (ptsh[:, 2] <= 1)
         pts = pts[inbb]
 
-        idx = np.random.randint(0, pts.shape[0], size=(self.opt.num_sample_inout,))
+        idx = np.random.randint(0, pts.shape[0], size=(self.opt.num_sample_inout+self.opt.num_sample_surface,))
 
         pts = pts[idx]
 
-        in_mask = (pts[:,3] <= 0.5)
+        in_mask = (pts[:,3] >= 0.5)
         out_mask = np.logical_not(in_mask)
 
         pts = pts[:,:3]
@@ -412,8 +413,7 @@ class FRLFaceDataset(Dataset):
 
         if ratio > 0.99:
             raise IOError('invalid data sample')
-
-        if samples.shape[0] != self.opt.num_sample_inout:
+        if samples.shape[0] != self.opt.num_sample_inout + self.opt.num_sample_surface:
             raise IOError('unable to sample sufficient number of points')
 
         samples = torch.Tensor(samples.T).float()
@@ -428,51 +428,51 @@ class FRLFaceDataset(Dataset):
     def get_item(self, index):
         # in case of IO error, use random sampling instead
         subject = ''
-        try:
-            sid = index % len(self.subjects)
-            tmp = index // len(self.subjects)
+        # try:
+        sid = index % len(self.subjects)
+        tmp = index // len(self.subjects)
 
-            vid = tmp % len(self.yaw_list)
-            pid = tmp // len(self.yaw_list)
+        vid = tmp % len(self.yaw_list)
+        pid = 0 # tmp // len(self.yaw_list)
 
-            eid = 0 # TODO
+        eid = 0 # TODO
 
-            # name of the subjects 'rp_xxxx_xxx'
-            subject = self.subjects[sid]
-            expression = self.exp_list[eid]
-            res = {
-                'name': subject,
-                'sid': sid,
-                'eid': eid,
-                'vid': vid,
-                'pid': pid,
-                'b_min': self.B_MIN,
-                'b_max': self.B_MAX,
-            }
-            render_data = self.get_render(sid, eid, num_views=self.num_views, view_id=vid,
-                                            pid=pid, random_sample=self.opt.random_multiview)
-            sample_data = self.get_sample(subject, expression, render_data['calib'][0].numpy())        
-            # p = sample_data['samples'].t().numpy()
-            # calib = render_data['calib'][0].numpy()
-            # mask = (255.0*(0.5*render_data['img'][0].permute(1,2,0).numpy()[:,:,::-1]+0.5)).astype(np.uint8)
-            # # mask = 255.0*np.stack(3*[render_data['mask'][0,0].numpy()],2)
-            # p = np.matmul(np.concatenate([p, np.ones((p.shape[0],1))], 1), calib.T)[:, :3]
-            # pts = 512*(0.5*p[sample_data['labels'].numpy().reshape(-1) == 1.0]+0.5)
-            # for p in pts:
-            #     mask = cv2.circle(mask, (int(p[0]),int(p[1])), 2, (0,255.0,0), -1)
-            # mask = cv2.putText(mask, render_data['files'][0], (5, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 0, 0), lineType=cv2.LINE_AA) 
-            # cv2.imshow('tmp.img', mask)
-            # # exit()
-            # cv2.waitKey(1000)
-            res.update(render_data)
-            res.update(sample_data)
-            return res
-        except Exception as e:
-            for i in range(10):
-                try:
-                    return self.get_item(index=random.randint(0, self.__len__() - 1)) 
-                except Exception as e:
-                    continue
+        # name of the subjects 'rp_xxxx_xxx'
+        subject = self.subjects[sid]
+        expression = self.exp_list[eid]
+        res = {
+            'name': subject,
+            'mesh_path': os.path.join(self.OBJ, subject, expression + '.ply'),
+            'sid': sid,
+            'vid': vid,
+            'pid': pid,
+            'b_min': self.B_MIN,
+            'b_max': self.B_MAX,
+        }
+        render_data = self.get_render(sid, eid, num_views=self.num_views, view_id=vid,
+                                        pid=pid, random_sample=self.opt.random_multiview)
+        sample_data = self.get_sample(subject, expression, render_data['calib'][0].numpy())        
+        # p = sample_data['samples'].t().numpy()
+        # calib = render_data['calib'][0].numpy()
+        # mask = (255.0*(0.5*render_data['img'][0].permute(1,2,0).numpy()[:,:,::-1]+0.5)).astype(np.uint8)
+        # # mask = 255.0*np.stack(3*[render_data['mask'][0,0].numpy()],2)
+        # p = np.matmul(np.concatenate([p, np.ones((p.shape[0],1))], 1), calib.T)[:, :3]
+        # pts = 512*(0.5*p[sample_data['labels'].numpy().reshape(-1) == 1.0]+0.5)
+        # for p in pts:
+        #     mask = cv2.circle(mask, (int(p[0]),int(p[1])), 2, (0,255.0,0), -1)
+        # mask = cv2.putText(mask, render_data['files'][0], (5, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 0, 0), lineType=cv2.LINE_AA) 
+        # cv2.imshow('tmp.img', mask)
+        # # exit()
+        # cv2.waitKey(1000)
+        res.update(render_data)
+        res.update(sample_data)
+        return res
+        # except Exception as e:
+        #     for i in range(10):
+        #         try:
+        #             return self.get_item(index=random.randint(0, self.__len__() - 1)) 
+        #         except Exception as e:
+        #             continue
 
     def __getitem__(self, index):
         return self.get_item(index)

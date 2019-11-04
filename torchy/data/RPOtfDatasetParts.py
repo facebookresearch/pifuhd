@@ -185,7 +185,6 @@ class RPOtfDatasetParts(RPDataset):
 
         inside = mesh.contains(sample_points)
 
-
         ptsh = ptsh[inbb][:self.opt.num_sample_surface]
         x = (self.load_size * (0.5 * ptsh[:,0] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
         y = (self.load_size * (0.5 * ptsh[:,1] + 0.5)).astype(np.int32).clip(0, self.load_size-1)

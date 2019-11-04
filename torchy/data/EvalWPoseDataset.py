@@ -32,20 +32,37 @@ def crop_image(img, rect):
     return new_img[y:(y+h),x:(x+w),:]
 
 def face_crop(pts):
-    nflag = pts[0,2] > 0.2
-    lflag = pts[17,2] > 0.2
-    rflag = pts[18,2] > 0.2
+    flag = pts[:,2] > 0.2
 
+    mshoulder = pts[1,:2]
     rear = pts[18,:2]
     lear = pts[17,:2]
-    nose = pts[0,:2] if nflag else 0.5 * (rear + lear)
+    nose = pts[0,:2]
 
-    center = nose
-    if lflag and not rflag:
-        center = lear
-    elif rflag and not lflag:
-        center = rear
-    radius = int(2.5*np.max(np.sqrt(((center[None] - np.stack([nose, rear if rflag else center, lear if lflag else center],0))**2).sum(1))))
+    center = np.copy(mshoulder)
+    center[1] = min(nose[1] if flag[0] else 1e8, lear[1] if flag[17] else 1e8, rear[1] if flag[18] else 1e8)
+
+    ps = []
+    pts_id = [0, 15, 16, 17, 18]
+    cnt = 0
+    for i in pts_id:
+        if flag[i]:
+            ps.append(pts[i,:2])
+            if i in [17, 18]:
+                cnt += 1
+
+    ps = np.stack(ps, 0)
+    if ps.shape[0] <= 1:
+        raise IOError('key points are not properly set')
+    if ps.shape[0] <= 3 and cnt != 2:
+        center = ps[-1]
+    else:
+        center = ps.mean(0)
+    radius = int(1.4*np.max(np.sqrt(((ps - center[None,:])**2).reshape(-1,2).sum(0))))
+
+
+    # radius = np.max(np.sqrt(((center[None] - np.stack([]))**2).sum(0))
+    # radius = int(1.0*abs(center[1] - mshoulder[1]))
     center = center.astype(np.int)
 
     x1 = center[0] - radius
@@ -55,38 +72,58 @@ def face_crop(pts):
 
     return (x1, y1, x2-x1, y2-y1)
 
-# def face_crop(pts):
-#     flag = pts[:,2] > 0.2
+def upperbody_crop(pts):
+    flag = pts[:,2] > 0.2
 
+    mshoulder = pts[1,:2]
+    ps = []
+    pts_id = [8]
+    for i in pts_id:
+        if flag[i]:
+            ps.append(pts[i,:2])
+
+    center = mshoulder
+    if len(ps) == 1:
+        ps = np.stack(ps, 0)
+        radius = int(0.8*np.max(np.sqrt(((ps - center[None,:])**2).reshape(-1,2).sum(1))))
+    else:
+        ps = []
+        pts_id = [0, 2, 5]
+        ratio = [0.4, 0.3, 0.3]
+        for i in pts_id:
+            if flag[i]:
+                ps.append(pts[i,:2])
+        ps = np.stack(ps, 0)
+        radius = int(0.8*np.max(np.sqrt(((ps - center[None,:])**2).reshape(-1,2).sum(1)) / np.array(ratio)))
+
+    center = center.astype(np.int)
+
+    x1 = center[0] - radius
+    x2 = center[0] + radius
+    y1 = center[1] - radius
+    y2 = center[1] + radius
+
+    return (x1, y1, x2-x1, y2-y1)
+
+# def upperbody_crop(pts):
 #     mshoulder = pts[1,:2]
+#     nflag = pts[0,2] > 0.2
+#     lflag = pts[17,2] > 0.2
+#     rflag = pts[18,2] > 0.2
+
 #     rear = pts[18,:2]
 #     lear = pts[17,:2]
-#     nose = pts[0,:2]
-
-#     center = np.copy(mshoulder)
-#     center[1] = min(nose[1] if flag[0] else 1e8, lear[1] if flag[17] else 1e8, rear[1] if flag[18] else 1e8)
-
-#     ps = []
-#     pts_id = [0, 15, 16, 17, 18]
-#     cnt = 0
-#     for i in pts_id:
-#         if flag[i]:
-#             ps.append(pts[i,:2])
-#             if i in [17, 18]:
-#                 cnt += 1
-
-#     ps = np.stack(ps, 0)
-#     if ps.shape[0] <= 1:
-#         raise IOError('key points are not properly set')
-#     if ps.shape[0] <= 3 and cnt != 2:
-#         center = ps[-1]
-#     else:
-#         center = ps.mean(0)
-#     radius = int(1.4*np.max(np.sqrt(((ps - center[None,:])**2).reshape(-1,2).sum(0))))
+#     top = pts[0,:2]
+#     if not nflag and lflag and rflag:
+#         top = 0.5 * (rear + lear)
+#     elif lflag:
+#         top = lear
+#     elif rflag:
+#         top = rear
 
 
-#     # radius = np.max(np.sqrt(((center[None] - np.stack([]))**2).sum(0))
-#     # radius = int(1.0*abs(center[1] - mshoulder[1]))
+#     center = mshoulder
+#     radius = int(2.5*np.sqrt(((center - top)**2).sum(0)))
 #     center = center.astype(np.int)
 
 #     x1 = center[0] - radius
@@ -95,33 +132,6 @@ def face_crop(pts):
 #     y2 = center[1] + radius
 
 #     return (x1, y1, x2-x1, y2-y1)
-
-def upperbody_crop(pts):
-    mshoulder = pts[1,:2]
-    nflag = pts[0,2] > 0.2
-    lflag = pts[17,2] > 0.2
-    rflag = pts[18,2] > 0.2
-
-    rear = pts[18,:2]
-    lear = pts[17,:2]
-    top = pts[0,:2]
-    if not nflag and lflag and rflag:
-        top = 0.5 * (rear + lear)
-    elif lflag:
-        top = lear
-    elif rflag:
-        top = rear
-
-    center = mshoulder
-    radius = int(2.5*np.sqrt(((center - top)**2).sum(0)))
-    center = center.astype(np.int)
-
-    x1 = center[0] - radius
-    x2 = center[0] + radius
-    y1 = center[1] - radius
-    y2 = center[1] + radius
-
-    return (x1, y1, x2-x1, y2-y1)
 
 def fullbody_crop(pts):
     pts = pts[pts[:,2] > 0.2]
@@ -137,6 +147,7 @@ def fullbody_crop(pts):
     y2 = center[1] + radius
 
     return (x1, y1, x2-x1, y2-y1)
+
 
 class EvalWPoseDataset(Dataset):
     @staticmethod
@@ -180,13 +191,26 @@ class EvalWPoseDataset(Dataset):
             data = json.load(json_file)['people'][0]
             keypoints = np.array(data['pose_keypoints_2d']).reshape(-1,3)
 
-            nflag = keypoints[0,2] > 0.2
-            lflag = keypoints[17,2] > 0.2
-            rflag = keypoints[18,2] > 0.2
-            if self.opt.crop_type != 'fullbody' and (not nflag or not (lflag | rflag)):
-                print('Waring: face should not be backfacing.')
+            flags = keypoints[:,2] > 0.5
 
-        im = cv2.imread(img_path)
+            nflag = flags[0]
+            mflag = flags[1]
+
+            check_id = [2, 5, 15, 16, 17, 18]
+            cnt = sum(flags[check_id])
+            if self.opt.crop_type == 'face' and (not (nflag and cnt > 3)):
+                print('Waring: face should not be backfacing.')
+            if self.opt.crop_type == 'upperbody' and (not (mflag and nflag and cnt > 3)):
+                print('Waring: upperbody should not be backfacing.')
+            if self.opt.crop_type == 'fullbody' and sum(flags) < 15:
+                print('Waring: not sufficient keypoints.')
+
+        im = cv2.imread(img_path, cv2.IMREAD_UNCHANGED)
+        if im.shape[2] == 4:
+            im = im / 255.0
+            im[:,:,:3] /= im[:,:,3:] + 1e-8
+            im = im[:,:,3:] * im[:,:,:3] + 0.5 * (1.0 - im[:,:,3:])
+            im = (255.0 * im).astype(np.uint8)
         h, w = im.shape[:2]
         
         intrinsic = np.identity(4)
