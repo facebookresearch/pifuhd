@@ -148,15 +148,15 @@ class RPOtfDataset(RPDataset):
                 for i in tqdm(range(self.opt.num_pts_dic)):
                     g_mesh_dics = {**g_mesh_dics, **(np.load(os.path.join(self.DICT, 'trimesh_dic%d.npy' % i),allow_pickle=True).item())}
     
-    def precompute_points(self, subject, num_files=1):
+    def precompute_points(self, subject, num_files=1, start_id=0):
         SAMPLE_DIR = os.path.join(self.SAMPLE, self.opt.sampling_mode, subject)
 
         mesh = copy.deepcopy(g_mesh_dics[subject])
         ratio = 0.8
-        for i in tqdm(range(num_files)):
+        for i in tqdm(range(start_id, start_id+num_files)):
             data_file = os.path.join(SAMPLE_DIR, '%05d.io.npy' % i)
             if 'sigma' in self.opt.sampling_mode:
-                surface_points, fid = trimesh.sample.sample_surface_even(mesh, int(ratio * self.num_sample_inout))
+                surface_points, fid = trimesh.sample.sample_surface(mesh, int(ratio * self.num_sample_inout))
                 theta = 2.0 * math.pi * np.random.rand(surface_points.shape[0])
                 phi = np.arccos(1 - 2 * np.random.rand(surface_points.shape[0]))
                 x = np.sin(phi) * np.cos(theta)

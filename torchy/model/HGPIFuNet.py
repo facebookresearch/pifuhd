@@ -32,7 +32,7 @@ class HGPIFuNet(BasePIFuNet):
 
         self.mlp = MLP(
             filter_channels=self.opt.mlp_dim,
-            # merge_layer=self.opt.merge_layer,
+            merge_layer=self.opt.merge_layer,
             num_views=self.num_views,
             res_layers=self.opt.mlp_res_layers,
             norm=self.opt.mlp_norm,
@@ -69,7 +69,7 @@ class HGPIFuNet(BasePIFuNet):
         if not self.training:
             self.im_feat_list = [self.im_feat_list[-1]]
         
-    def query(self, points, calibs, transforms=None, labels=None):
+    def query(self, points, calibs, transforms=None, labels=None, update_pred=True, update_phi=True):
         '''
         given 3d points, we obtain 2d projection of these given the camera matrices.
         filter needs to be called beforehand.
@@ -108,7 +108,7 @@ class HGPIFuNet(BasePIFuNet):
 
         sp_feat = self.spatial_enc(xyz, calibs=calibs)
 
-        self.intermediate_preds_list = []
+        intermediate_preds_list = []
 
         phi = None
         for i, im_feat in enumerate(self.im_feat_list):
@@ -124,10 +124,14 @@ class HGPIFuNet(BasePIFuNet):
             pred, phi = self.mlp(point_local_feat)
             pred = in_bb * pred
 
-            self.intermediate_preds_list.append(pred)
+            intermediate_preds_list.append(pred)
         
-        self.phi = phi
-        self.preds = self.intermediate_preds_list[-1]
+        if update_phi:
+            self.phi = phi
+
+        if update_pred:
+            self.intermediate_preds_list = intermediate_preds_list
+            self.preds = self.intermediate_preds_list[-1]
 
     def calc_normal(self, points, calibs, transforms=None, labels=None, delta=0.01, fd_type='forward'):
         '''

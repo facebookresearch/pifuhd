@@ -109,10 +109,11 @@ def upperbody_crop(pts):
         if flag[i]:
             ps.append(pts[i,:2])
 
+    # 1106: changed radius from 0.8 to 1.2
     center = mshoulder
     if len(ps) == 1:
         ps = np.stack(ps, 0)
-        radius = int(0.8*np.max(np.sqrt(((ps - center[None,:])**2).reshape(-1,2).sum(1))))
+        radius = int(1.2*np.max(np.sqrt(((ps - center[None,:])**2).reshape(-1,2).sum(1))))
     else:
         ps = []
         pts_id = [0, 2, 5]
@@ -121,7 +122,7 @@ def upperbody_crop(pts):
             if flag[i]:
                 ps.append(pts[i,:2])
         ps = np.stack(ps, 0)
-        radius = int(0.8*np.max(np.sqrt(((ps - center[None,:])**2).reshape(-1,2).sum(1)) / np.array(ratio)))
+        radius = int(1.2*np.max(np.sqrt(((ps - center[None,:])**2).reshape(-1,2).sum(1)) / np.array(ratio)))
 
     center = center.astype(np.int)
 
@@ -249,8 +250,14 @@ class RPDatasetParts(Dataset):
 
         # PIL to tensor
         self.to_tensor = transforms.Compose([
+            transforms.Resize(self.load_size),
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ])
+
+        self.to_tensor_mask = transforms.Compose([
+            transforms.Resize(self.load_size),
+            transforms.ToTensor()
         ])
 
         # augmentation
@@ -391,17 +398,23 @@ class RPDatasetParts(Dataset):
             trans_mat[0, 3] = -scale*(rect[0] + rect[2]//2 - w//2) * scale_im2ndc
             trans_mat[1, 3] = -scale*(rect[1] + rect[3]//2 - h//2) * scale_im2ndc
             
-            intrinsic = np.matmul(trans_mat, intrinsic)
-            im = cv2.resize(im, (self.load_size, self.load_size))
-        
+            if self.opt.random_body_chop and np.random.rand() > 0.5 and self.is_train:
+                y_offset = random.randint(-int(0.1*im.shape[0]),0)
+                if y_offset != 0:
+                    im[y_offset:,:,3] = 0.0
+
             im = im / 255.0
             im[:,:,:3] /= im[:,:,3:] + 1e-8
             im = (255.0 * im).astype(np.uint8)[:,:,[2,1,0,3]]
 
+            intrinsic = np.matmul(trans_mat, intrinsic)
+            
+            im = cv2.resize(im, (512, 512))
+
             render = Image.fromarray(im[:,:,:3]).convert('RGB')
             mask = Image.fromarray(im[:,:,3]).convert('L')
                 
-            tw, th = self.load_size, self.load_size
+            tw, th = 512, 512
             dx, dy = 0, 0
             if self.is_train and self.num_views < 2:
                 # pad images
@@ -419,7 +432,7 @@ class RPDatasetParts(Dataset):
                     w = int(rand_scale * w)
                     h = int(rand_scale * h)
                     render = render.resize((w, h), Image.BILINEAR)
-                    mask = mask.resize((w, h), Image.NEAREST)
+                    mask = mask.resize((w, h), Image.BILINEAR)
                     intrinsic[:3,:] *= rand_scale
                 
                 if self.opt.random_rotate:
@@ -437,7 +450,7 @@ class RPDatasetParts(Dataset):
 
                 # # random translate in the pixel space
                 if self.opt.random_trans:
-                    pad_size = int(0.08 * self.load_size)
+                    pad_size = int(0.08 * tw)
                     render = ImageOps.expand(render, pad_size, fill=0)
                     mask = ImageOps.expand(mask, pad_size, fill=0)
 
@@ -447,8 +460,8 @@ class RPDatasetParts(Dataset):
                     dy = random.randint(-int(round((h-th)/4.0)),
                                         int(round((h-th)/4.0)))
                     trans_intrinsic = np.identity(4)
-                    intrinsic[0, 3] += -dx / float(self.opt.loadSize // 2)
-                    intrinsic[1, 3] += -dy / float(self.opt.loadSize // 2)
+                    intrinsic[0, 3] += -dx / float(tw // 2)
+                    intrinsic[1, 3] += -dy / float(th // 2)
 
             w, h = render.size    
             x1 = int(round((w - tw) / 2.)) + dx
@@ -480,7 +493,7 @@ class RPDatasetParts(Dataset):
 
             render = self.to_tensor(render)
 
-            mask = transforms.ToTensor()(mask).float()
+            mask = self.to_tensor_mask(mask)
             mask_list.append(mask)
 
             if not self.opt.random_bg or len(self.bg_list) == 0:                

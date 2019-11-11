@@ -31,10 +31,10 @@ def precompute_points(opt):
     subjects = dataset.get_subjects()
     
     print('# of subjects: ', len(subjects))
-    dataset.opt.simga = 5
-    dataset.opt.sampleing_mode = 'uniform_simga5'
+    dataset.opt.simga = 3
+    dataset.opt.sampleing_mode = 'uniform_simga3'
     for sub in subjects:
-        dataset.precompute_points(sub, num_files=100)
+        dataset.precompute_points(sub, num_files=50, start_id=50)
 
     # for i in range(1, 10, 2):
     #     dataset.opt.sigma = float(i)

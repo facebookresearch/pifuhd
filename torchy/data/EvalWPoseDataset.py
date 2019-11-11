@@ -159,7 +159,7 @@ class EvalWPoseDataset(Dataset):
         self.projection_mode = projection
 
         self.root = self.opt.dataroot
-        self.img_files = sorted([os.path.join(self.root,f) for f in os.listdir(self.root) if '.png' in f])
+        self.img_files = sorted([os.path.join(self.root,f) for f in os.listdir(self.root) if '.png' in f or '.jpg' in f])
         self.IMG = os.path.join(self.root)
 
         self.phase = 'val'
@@ -183,12 +183,15 @@ class EvalWPoseDataset(Dataset):
 
     def get_item(self, index):
         img_path = self.img_files[index]
-        joint_path = self.img_files[index].replace('.png', '_keypoints.json')
+        joint_path = self.img_files[index].replace('.%s' % (self.img_files[index].split('.')[-1]), '_keypoints.json')
         # Name
         img_name = os.path.splitext(os.path.basename(img_path))[0]
         # Calib
         with open(joint_path) as json_file:
-            data = json.load(json_file)['people'][0]
+            data = json.load(json_file)
+            if len(data['people']) == 0:
+                raise IOError('non human found!!')
+            data = data['people'][0]
             keypoints = np.array(data['pose_keypoints_2d']).reshape(-1,3)
 
             flags = keypoints[:,2] > 0.5
@@ -228,8 +231,10 @@ class EvalWPoseDataset(Dataset):
         trans_mat[1, 3] = scale*(rect[1] + rect[3]//2 - h//2) * scale_im2ndc
         
         intrinsic = np.matmul(trans_mat, intrinsic)
+        im_512 = cv2.resize(im, (512, 512))
         im = cv2.resize(im, (self.load_size, self.load_size))
 
+        image_512 = Image.fromarray(im_512[:,:,::-1]).convert('RGB')
         image = Image.fromarray(im[:,:,::-1]).convert('RGB')
         
         B_MIN = np.array([-1, -1, -1])
@@ -241,10 +246,12 @@ class EvalWPoseDataset(Dataset):
         calib_world = torch.Tensor(intrinsic).float()
 
         # image
+        image_512 = self.to_tensor(image_512)
         image = self.to_tensor(image)
         return {
             'name': img_name,
             'img': image.unsqueeze(0),
+            'img_512': image_512.unsqueeze(0),
             'calib': calib.unsqueeze(0),
             'calib_world': calib_world.unsqueeze(0),
             'b_min': B_MIN,

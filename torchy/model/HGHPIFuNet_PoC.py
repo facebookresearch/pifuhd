@@ -78,7 +78,7 @@ class HGHPIFuNet(BasePIFuNet):
         if not self.training:
             self.im_feat_list = [self.im_feat_list[-1]]
         
-    def query(self, points, calibs, transforms=None, labels=None):
+    def query(self, points, calibs, transforms=None, labels=None, update_pred=True, update_phi=True):
         '''
         given 3d points, we obtain 2d projection of these given the camera matrices.
         filter needs to be called beforehand.
@@ -117,7 +117,7 @@ class HGHPIFuNet(BasePIFuNet):
 
         sp_feat = self.spatial_enc(xyz, calibs=calibs)
 
-        self.intermediate_preds_list = []
+        intermediate_preds_list = []
 
         phi = None
         for i, im_feat in enumerate(self.im_feat_list):
@@ -132,12 +132,16 @@ class HGHPIFuNet(BasePIFuNet):
                 point_local_feat = torch.cat(point_local_feat_list, 1)
             pred, phi = self.mlp(point_local_feat)
             pred = in_bb * pred
+            
+            intermediate_preds_list.append(pred)
 
-            self.intermediate_preds_list.append(pred)
-
-        self.phi = phi
+        if update_phi:
+            self.phi = phi
         point_local_feat_h = torch.cat([self.index(self.normx, xy), phi.detach()], 1)
-        self.preds = self.mlp2(point_local_feat_h)[0]
+
+        if update_pred:        
+            self.intermediate_preds_list = intermediate_preds_list
+            self.preds = self.mlp2(point_local_feat_h)[0]
 
     def calc_normal(self, points, calibs, transforms=None, labels=None, delta=0.01, fd_type='forward'):
         '''

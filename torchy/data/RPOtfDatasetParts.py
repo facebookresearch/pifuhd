@@ -113,7 +113,7 @@ class RPOtfDatasetParts(RPDataset):
     def get_sample(self, subject, calib, mask=None):
             return self.load_points_sample(subject, calib, mask, self.opt.sigma_surface)
 
-    def get_otf_sampling(self, subject, calib, mask, sample_data):
+    def get_otf_sampling(self, subject, calib, mask, sample_data=None):
         # test only
         if not self.is_train:
             random.seed(1991)
@@ -197,7 +197,7 @@ class RPOtfDatasetParts(RPDataset):
 
         samples = np.concatenate([inside_points, outside_points], 0).T # [3, N]
         labels = np.concatenate([np.ones((1, inside_points.shape[0])), np.zeros((1, outside_points.shape[0]))], 1)
-        ratio = outside_points.shape[0]/samples.shape[0]
+        ratio = outside_points.shape[0] / samples.shape[1]
 
         samples = torch.Tensor(samples).float()
         labels = torch.Tensor(labels).float()
@@ -205,10 +205,17 @@ class RPOtfDatasetParts(RPDataset):
         del mesh
         gc.collect()
 
-        sample_data['samples'] = torch.cat([sample_data['samples'], samples],1)
-        sample_data['labels'] = torch.cat([sample_data['labels'], labels],1)
-        sample_data['ratio'] = 1.0 - sample_data['labels'].sum().item() / sample_data['labels'].size(1)
-        return sample_data
+        if sample_data is not None:
+            sample_data['samples'] = torch.cat([sample_data['samples'], samples],1)
+            sample_data['labels'] = torch.cat([sample_data['labels'], labels],1)
+            sample_data['ratio'] = 1.0 - sample_data['labels'].sum().item() / sample_data['labels'].size(1)
+            return sample_data
+        else:
+            return {
+                'samples': samples,
+                'labels': labels,
+                'ratio': ratio
+            }
 
     def get_item(self, index):
         # in case of IO error, use random sampling instead
@@ -235,15 +242,17 @@ class RPOtfDatasetParts(RPDataset):
             }
             render_data = self.get_render(sid, num_views=self.num_views, view_id=vid,
                                         pid=pid, random_sample=self.opt.random_multiview)
-            sample_data = self.get_sample(subject, render_data['calib'][0].numpy(), render_data['mask'][0].numpy()) 
-            sample_data = self.get_otf_sampling(subject, render_data['calib'][0].numpy(), render_data['mask'][0].numpy(), sample_data)
-            
+            if self.opt.num_sample_inout:
+                sample_data = self.get_sample(subject, render_data['calib'][0].numpy(), render_data['mask'][0].numpy()) 
+                sample_data = self.get_otf_sampling(subject, render_data['calib'][0].numpy(), render_data['mask'][0].numpy(), sample_data)
+            else:
+                sample_data = self.get_otf_sampling(subject, render_data['calib'][0].numpy(), render_data['mask'][0].numpy())
             # p = sample_data['samples'].t().numpy()
             # calib = render_data['calib'][0].numpy()
             # mask = (255.0*(0.5*render_data['img'][0].permute(1,2,0).numpy()[:,:,::-1]+0.5)).astype(np.uint8)
             # # mask = 255.0*np.stack(3*[render_data['mask'][0,0].numpy()],2)
             # p = np.matmul(np.concatenate([p, np.ones((p.shape[0],1))], 1), calib.T)[:, :3]
-            # pts = 512*(0.5*p[sample_data['labels'].numpy().reshape(-1) == 1.0]+0.5)
+            # pts = mask.shape[0]*(0.5*p[sample_data['labels'].numpy().reshape(-1) == 1.0]+0.5)
             # for p in pts:
             #     mask = cv2.circle(mask, (int(p[0]),int(p[1])), 2, (0,255.0,0), -1)
             # mask = cv2.putText(mask, res['name'], (5, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 0, 0), lineType=cv2.LINE_AA) 

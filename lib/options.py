@@ -158,6 +158,13 @@ class BaseOptions():
         parser.add_argument('--mask_path', type=str, help='path for input mask')
         parser.add_argument('--img_path', type=str, help='path for input image')
 
+        # for multi resolution
+        parser.add_argument('--load_netMR_checkpoint_path', type=str, help='path to save checkpoints')
+        parser.add_argument('--loadSizeBig', type=int, default=1024, help='load size of input image')
+        parser.add_argument('--loadSizeLocal', type=int, default=512, help='load size of input image')
+        parser.add_argument('--train_full_pifu', action='store_true')
+        parser.add_argument('--num_local', type=int, default=1)
+
         # aug
         group_aug = parser.add_argument_group('aug')
         group_aug.add_argument('--aug_alstd', type=float, default=0.0, help='augmentation pca lighting alpha std')
@@ -205,16 +212,17 @@ class BaseOptions():
 
         if len(opt.mlp_res_layers) == 1 and opt.mlp_res_layers[0] < 1:
             opt.mlp_res_layers = []
-
-        if opt.sp_enc_type == 'vol':
-            opt.name = '%s_img.hg.%s.%d.%d.%d_vol.%s.%s.%d-%d_wbg%d_s%1.f.%1.f' % \
-                (opt.name, opt.norm, opt.num_stack, opt.hg_depth, opt.hg_dim, \
-                opt.vol_net, opt.vol_norm, opt.vol_ch_in, opt.vol_ch_out, int(opt.random_bg), opt.sigma_min, opt.sigma_max)
-            opt.mlp_dim = [opt.vol_ch_out if opt.sp_no_pifu else opt.vol_ch_out + opt.hg_dim] + opt.mlp_dim
-        else:
-            opt.name = '%s_img.hg.%s.%d.%d.%d_wbg%d_s%1.f.%1.f' % \
-                (opt.name, opt.norm, opt.num_stack, opt.hg_depth, opt.hg_dim, \
-                 int(opt.random_bg), opt.sigma_min, opt.sigma_max)
+        
+        # if opt.sp_enc_type == 'vol':
+        #     opt.name = '%s_img.hg.%s.%d.%d.%d_vol.%s.%s.%d-%d_wbg%d_s%1.f.%1.f' % \
+        #         (opt.name, opt.norm, opt.num_stack, opt.hg_depth, opt.hg_dim, \
+        #         opt.vol_net, opt.vol_norm, opt.vol_ch_in, opt.vol_ch_out, int(opt.random_bg), opt.sigma_min, opt.sigma_max)
+        #     opt.mlp_dim = [opt.vol_ch_out if opt.sp_no_pifu else opt.vol_ch_out + opt.hg_dim] + opt.mlp_dim
+        # else:
+        #     opt.name = '%s_img.hg.%s.%d.%d.%d_wbg%d_s%1.f.%1.f' % \
+        #         (opt.name, opt.norm, opt.num_stack, opt.hg_depth, opt.hg_dim, \
+        #          int(opt.random_bg), opt.sigma_min, opt.sigma_max)
+        if 'mr' not in opt.name:
             opt.mlp_dim = [opt.hg_dim + 1] + opt.mlp_dim
             
 
