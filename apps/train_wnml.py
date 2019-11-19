@@ -72,7 +72,10 @@ def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True):
     calib_tensor = data['calib'].to(device=cuda)
 
     net.filter(image_tensor)
-
+    if net.opt.use_front_normal:
+        image_tensor = torch.cat([image_tensor, net.nmlF], 0)
+    if net.opt.use_back_normal:
+        image_tensor = torch.cat([image_tensor, net.nmlB], 0)
     b_min = data['b_min']
     b_max = data['b_max']
     try:
@@ -269,19 +272,6 @@ def train(opt):
 
     projection_mode = train_dataset.projection_mode
 
-    if opt.use_mix:
-        if opt.crop_type != 'face':
-            raise NameError('only face is supported now.')
-        dataroot = opt.dataroot
-        opt.dataroot = opt.dataroot_mix
-        train_dataset2 = FRLFaceDataset(opt, phase='train')
-        test_dataset2 = FRLFaceDataset(opt, phase='val')
-        print('frl data: %d (train), %d (test)' % (len(train_dataset2),len(test_dataset2)))
-        opt.dataroot = dataroot
-
-        train_dataset = MixDataset(train_dataset, train_dataset2, opt.mix_ratio, phase='train')
-        test_dataset = MixDataset(test_dataset, test_dataset2, phase='val')
-
     train_data_loader = DataLoader(train_dataset,
                                    batch_size=opt.batch_size, shuffle=not opt.serial_batches,
                                    num_workers=opt.num_threads, pin_memory=opt.pin_memory)
@@ -310,12 +300,24 @@ def train(opt):
     else:
         raise NameError('unknown loss type %s' % opt.nml_loss_type)
     
-    if opt.netG == 'hghpifu':
-        netG = HGHPIFuNet(opt, projection_mode, criteria)
-    if opt.netG == 'resnet':
-        netG = ResNetPIFuNet(opt, projection_mode, criteria)
+    if opt.use_aio_normal:
+        netG = HGPIFuNetwNMLAIO(opt, projection_mode, criteria)
+        try:
+            netG.netFB.load_state_dict(torch.load(opt.load_netFB_checkpoint_path))
+        except:
+            raise IOError('netFB is not loaded properly!!')
     else:
-        netG = HGPIFuNet(opt, projection_mode, criteria)
+        netG = HGPIFuNetwNML(opt, projection_mode, criteria)
+        if opt.use_front_normal:
+            try:
+                netG.netF.load_state_dict(torch.load(opt.load_netF_checkpoint_path))
+            except:
+                raise IOError('netF is not loaded properly!!')
+        if opt.use_back_normal:
+            try:
+                netG.netB.load_state_dict(torch.load(opt.load_netB_checkpoint_path))
+            except:
+                raise IOError('netB is not loaded properly!!')
 
     lr = opt.learning_rate
     
@@ -325,10 +327,24 @@ def train(opt):
     def set_eval():
         netG.eval()
 
+    # for fine tuning 
+    # load_netG_checkpoint_path = 'checkpoints/cluster_fullbody_center_1025_img.hg.group.4.2.256_wbg1_s3.20_train_latest'
+    # print('Loading netG from ', load_netG_checkpoint_path)
+    # state_dict_netG = torch.load(load_netG_checkpoint_path) 
+    # opt_netG = state_dict_netG['opt']
+    # netGG = HGHPIFuNet(opt_netG, projection_mode)
+    # netGG.load_state_dict(state_dict_netG['model_state_dict'])
+    # netG.loadFromHGHPIFu(netGG)
+
     # load checkpoints        
     if state_dict is not None:
         if 'model_state_dict' in state_dict:
-            netG.load_state_dict(state_dict['model_state_dict'])
+            try:
+                netG.load_state_dict(state_dict['model_state_dict'])
+            except:
+                tmpG = HGPIFuNetwNML(opt, projection_mode, criteria)
+                tmpG.load_state_dict(state_dict['model_state_dict'])
+                netG.loadFromHGHPIFu(tmpG)
         else: # this is deprecated but keep it for now.
             netG.load_state_dict(state_dict)
     
@@ -336,7 +352,8 @@ def train(opt):
             opt.resume_epoch = state_dict['epoch']
         if opt.resume_epoch < 0 or opt.finetune:
             opt.resume_epoch = 0
- 
+
+    print(netG)
     netG = netG.to(device=cuda)
     
     multi_gpu = False
@@ -452,7 +469,7 @@ def train(opt):
 
                         vis.plot_current_test_losses(epoch, 0, test_losses)
                         set_train()
-
+                    print('saving checkpoints')
                     save_dict = {
                         'opt': opt,
                         'epoch': epoch,

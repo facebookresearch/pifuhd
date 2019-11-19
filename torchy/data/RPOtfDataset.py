@@ -148,12 +148,14 @@ class RPOtfDataset(RPDataset):
                 for i in tqdm(range(self.opt.num_pts_dic)):
                     g_mesh_dics = {**g_mesh_dics, **(np.load(os.path.join(self.DICT, 'trimesh_dic%d.npy' % i),allow_pickle=True).item())}
     
-    def precompute_points(self, subject, num_files=1, start_id=0):
+    def precompute_points(self, subject, num_files=1, start_id=0, sigma=None):
+        if sigma is None:
+            sigma = self.opt.sigma
         SAMPLE_DIR = os.path.join(self.SAMPLE, self.opt.sampling_mode, subject)
 
         mesh = copy.deepcopy(g_mesh_dics[subject])
         ratio = 0.8
-        for i in tqdm(range(start_id, start_id+num_files)):
+        for i in range(start_id, start_id+num_files):
             data_file = os.path.join(SAMPLE_DIR, '%05d.io.npy' % i)
             if 'sigma' in self.opt.sampling_mode:
                 surface_points, fid = trimesh.sample.sample_surface(mesh, int(ratio * self.num_sample_inout))
@@ -163,7 +165,7 @@ class RPOtfDataset(RPDataset):
                 y = np.sin(phi) * np.sin(theta)
                 z = np.cos(phi)
                 dir = np.stack([x,y,z],1)
-                radius = np.random.normal(scale=self.opt.sigma, size=[surface_points.shape[0],1])
+                radius = np.random.normal(scale=sigma, size=[surface_points.shape[0],1])
                 sample_points = surface_points + radius * dir
             if self.opt.sampling_mode == 'uniform':
                 # add random points within image space

@@ -160,6 +160,7 @@ class EvalWPoseDataset(Dataset):
 
         self.root = self.opt.dataroot
         self.img_files = sorted([os.path.join(self.root,f) for f in os.listdir(self.root) if '.png' in f or '.jpg' in f])
+        # random.shuffle(self.img_files)
         self.IMG = os.path.join(self.root)
 
         self.phase = 'val'
@@ -191,8 +192,25 @@ class EvalWPoseDataset(Dataset):
             data = json.load(json_file)
             if len(data['people']) == 0:
                 raise IOError('non human found!!')
-            data = data['people'][0]
-            keypoints = np.array(data['pose_keypoints_2d']).reshape(-1,3)
+            largest_data = data['people'][0]
+            height = 0
+            if len(data['people']) != 1:
+                for i in range(len(data['people'])):
+                    tmp = data['people'][i]
+                    keypoints = np.array(tmp['pose_keypoints_2d']).reshape(-1,3)
+
+                    flags = keypoints[:,2] > 0.5
+                    if sum(flags) == 0:
+                        continue
+                    bbox = keypoints[flags]
+                    bbox_max = bbox.max(0)
+                    bbox_min = bbox.min(0)
+
+                    if height < bbox_max[1] - bbox_min[1]:
+                        height = bbox_max[1] - bbox_min[1]
+                        largest_data = tmp
+
+            keypoints = np.array(largest_data['pose_keypoints_2d']).reshape(-1,3)
 
             flags = keypoints[:,2] > 0.5
 

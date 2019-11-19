@@ -16,7 +16,7 @@ class VolumetricEncoder(nn.Module):
         self.vol_ch_in = opt.vol_ch_in
         self.vol_ch_out = opt.vol_ch_out
 
-        self.image2vol = HGFilter(1, opt.vol_hg_depth, 32 * self.vol_ch_in, opt.vol_norm, 'ave_pool', False)
+        self.image2vol = HGFilter(1, opt.vol_hg_depth, 3, 32 * self.vol_ch_in, opt.vol_norm, 'ave_pool', False)
         if self.opt.vol_net == 'hg':
             self.vol_enc = HGFilter3D(self.vol_ch_in, 1, 3, self.vol_ch_out, opt.vol_norm, 'ave_pool', False)
         elif self.opt.vol_net == 'unet':

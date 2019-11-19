@@ -165,6 +165,19 @@ class BaseOptions():
         parser.add_argument('--train_full_pifu', action='store_true')
         parser.add_argument('--num_local', type=int, default=1)
 
+        # for normal condition
+        parser.add_argument('--load_netFB_checkpoint_path', type=str, help='path to save checkpoints')
+        parser.add_argument('--load_netF_checkpoint_path', type=str, help='path to save checkpoints')
+        parser.add_argument('--load_netB_checkpoint_path', type=str, help='path to save checkpoints')
+        parser.add_argument('--use_aio_normal', action='store_true')
+        parser.add_argument('--use_front_normal', action='store_true')
+        parser.add_argument('--use_back_normal', action='store_true')
+        parser.add_argument('--no_intermediate_loss', action='store_true')
+
+        parser.add_argument('--debug_crop', action='store_true')
+
+        parser.add_argument('--tmp_id', type=int, default=0, help='256 | 512')
+
         # aug
         group_aug = parser.add_argument_group('aug')
         group_aug.add_argument('--aug_alstd', type=float, default=0.0, help='augmentation pca lighting alpha std')
@@ -174,6 +187,10 @@ class BaseOptions():
         group_aug.add_argument('--aug_hue', type=float, default=0.05, help='augmentation hue')
         group_aug.add_argument('--aug_gry', type=float, default=0.1, help='augmentation gray scale')
         group_aug.add_argument('--aug_blur', type=float, default=0.0, help='augmentation blur')
+
+        # for reconstruction
+        parser.add_argument('--start_id', type=int, default=-1, help='load size of input image')
+        parser.add_argument('--end_id', type=int, default=-1, help='load size of input image')
 
         # special tasks
         self.initialized = True
@@ -222,9 +239,9 @@ class BaseOptions():
         #     opt.name = '%s_img.hg.%s.%d.%d.%d_wbg%d_s%1.f.%1.f' % \
         #         (opt.name, opt.norm, opt.num_stack, opt.hg_depth, opt.hg_dim, \
         #          int(opt.random_bg), opt.sigma_min, opt.sigma_max)
-        if 'mr' not in opt.name:
+        if 'resnet' not in opt.name and 'mr' not in opt.name:
             opt.mlp_dim = [opt.hg_dim + 1] + opt.mlp_dim
-            
+        
 
         if opt.netC == 'resblkhpifu':
             opt.mlp_dim_color = [256 + opt.mlp_dim[opt.merge_layer+1]] + opt.mlp_dim_color

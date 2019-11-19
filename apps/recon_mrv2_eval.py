@@ -88,18 +88,28 @@ def reshape_sample_tensor(sample_tensor, num_views):
     return sample_tensor
 
 def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True, components=False):
+    image_tensor_global = data['img_512'].to(device=cuda)
     image_tensor = data['img'].to(device=cuda)
     calib_tensor = data['calib'].to(device=cuda)
 
-    net.filter(image_tensor)
+    net.filter_global(image_tensor_global)
+    net.filter_local(image_tensor[:,None])
 
+    try:
+        if net.netG.netF is not None:
+            image_tensor_global = torch.cat([image_tensor_global, net.netG.nmlF], 0)
+        if net.netG.netB is not None:
+            image_tensor_global = torch.cat([image_tensor_global, net.netG.nmlB], 0)
+    except:
+        pass
+    
     b_min = data['b_min']
     b_max = data['b_max']
     try:
         save_img_path = save_path[:-4] + '.png'
         save_img_list = []
-        for v in range(image_tensor.shape[0]):
-            save_img = (np.transpose(image_tensor[v].detach().cpu().numpy(), (1, 2, 0)) * 0.5 + 0.5)[:, :, ::-1] * 255.0
+        for v in range(image_tensor_global.shape[0]):
+            save_img = (np.transpose(image_tensor_global[v].detach().cpu().numpy(), (1, 2, 0)) * 0.5 + 0.5)[:, :, ::-1] * 255.0
             save_img_list.append(save_img)
         save_img = np.concatenate(save_img_list, axis=1)
         cv2.imwrite(save_img_path, save_img)
@@ -129,8 +139,8 @@ def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True, compo
 def recon(opt):
     # load checkpoints
     state_dict_path = None
-    if opt.load_netG_checkpoint_path is not None:
-        state_dict_path = opt.load_netG_checkpoint_path
+    if opt.load_netMR_checkpoint_path is not None:
+        state_dict_path = opt.load_netMR_checkpoint_path
     elif opt.resume_epoch < 0:
         state_dict_path = '%s/%s_train_latest' % (opt.checkpoints_path, opt.name)
         opt.resume_epoch = 0
@@ -146,10 +156,12 @@ def recon(opt):
             dataroot = opt.dataroot
             resolution = opt.resolution
             results_path = opt.results_path
+            loadSize = opt.loadSize
             opt = state_dict['opt']
             opt.dataroot = dataroot
             opt.resolution = resolution
             opt.results_path = results_path
+            opt.loadSize = loadSize
     else:
         raise Exception('failed loading state dict!', state_dict_path)
     
@@ -158,12 +170,24 @@ def recon(opt):
     cuda = torch.device('cuda:%d' % opt.gpu_id)
 
     # test_dataset = EvalDataset(opt)
-    test_dataset = EvalWPoseDataset(opt)
+    test_dataset = EvalRPDataset(opt)
 
     print('test data size: ', len(test_dataset))
     projection_mode = test_dataset.projection_mode
 
-    netG = HGHPIFuNet(opt, projection_mode).to(device=cuda)
+    opt_netG = state_dict['opt_netG']
+    netG = HGPIFuNetwNML(opt_netG, projection_mode).to(device=cuda)
+
+    if 'hg_ablation' in opt.netG:
+        netMR = HGPIFuMRNetAblation(opt, projection_mode)
+    elif 'resblk_ablation' in opt.netG:
+        netMR = ResBlkPIFuMRNetAblation(opt, projection_mode)
+    elif 'hg' in opt.netG:
+        netMR = HGPIFuMRNetV2(opt, netG, projection_mode)
+    elif 'resblk' in opt.netG:
+        netMR = ResBlkPIFuMRNet(opt, netG, projection_mode)
+
+    netMR = netMR.to(device=cuda)
 
     def set_eval():
         netG.eval()
@@ -171,9 +195,9 @@ def recon(opt):
     # load checkpoints
     if state_dict is not None:
         if 'model_state_dict' in state_dict:
-            netG.load_state_dict(state_dict['model_state_dict'])
+            netMR.load_state_dict(state_dict['model_state_dict'])
         else: # this is deprecated but keep it for now.
-            netG.load_state_dict(state_dict)
+            netMR.load_state_dict(state_dict)
 
     os.makedirs(opt.checkpoints_path, exist_ok=True)
     os.makedirs(opt.results_path, exist_ok=True)
@@ -186,7 +210,7 @@ def recon(opt):
         print('generate mesh (test) ...')
         for test_data in tqdm(test_dataset):
             save_path = '%s/%s/recon/result_%s.obj' % (opt.results_path, opt.name, test_data['name'])
-            gen_mesh(opt.resolution, netG, cuda, test_data, save_path, components=opt.use_compose)
+            gen_mesh(opt.resolution, netMR, cuda, test_data, save_path, components=opt.use_compose)
 
 def reconWrapper(args=None):
     opt = parser.parse(args)

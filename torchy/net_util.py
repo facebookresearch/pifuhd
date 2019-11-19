@@ -83,6 +83,8 @@ class CustomBCELoss(nn.Module):
             loss = -(gamma*gt*torch.log(x_hat) + (1.0-gamma)*(1.0-gt)*torch.log(1.0-x_hat))
 
         if w is not None:
+            if len(w.size()) == 1:
+                w = w[:,None,None] 
             return (loss * w).mean()
         else:
             return loss.mean()

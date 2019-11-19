@@ -292,28 +292,39 @@ executor.update_parameters(timeout_min=72*60, gpus_per_node=4, cpus_per_task=40,
 # print(job.job_id)  # ID of your job
 
 
-cmd = base_cmd + ['--batch_size', '8', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2',\
-                '--z_size', '200.0', '--mask_ratio', '0.2', '--mlp_norm', 'none', '--sigma_max', '5.0', '--sigma_min', '5.0',\
-                '--sampling_otf', '--sampling_parts', '--num_sample_surface', '8000', '--occ_loss_type', 'mse',\
-                '--uniform_ratio', '0.2', '--num_iter', '400000', '--schedule', '300000', '350000', '--learning_rate', '1e-3', '--resolution', '256']
+# cmd = base_cmd + ['--batch_size', '8', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2',\
+#                 '--z_size', '200.0', '--mask_ratio', '0.2', '--mlp_norm', 'none', '--sigma_max', '5.0', '--sigma_min', '5.0',\
+#                 '--sampling_otf', '--sampling_parts', '--num_sample_surface', '8000', '--occ_loss_type', 'mse',\
+#                 '--uniform_ratio', '0.2', '--num_iter', '400000', '--schedule', '300000', '350000', '--learning_rate', '1e-3', '--resolution', '256']
 
-cmd1 = cmd + ['--name', 'cluster_upperbody256_mse_crop12_1107', '--dataroot', './../../data/hf_human_upperbody', '--crop_type', 'upperbody', '--random_body_chop', '--loadSize', '256','--num_sample_inout', '2000']
-job = executor.submit(trainerWrapper, cmd1)  
+# cmd1 = cmd + ['--name', 'cluster_upperbody256_mse_crop12_1107', '--dataroot', './../../data/hf_human_upperbody', '--crop_type', 'upperbody', '--random_body_chop', '--loadSize', '256','--num_sample_inout', '2000']
+# job = executor.submit(trainerWrapper, cmd1)  
+# print(job.job_id)  # ID of your job
+
+# cmd1 = cmd + ['--name', 'cluster_upperbody512_mse_crop12_1107', '--dataroot', './../../data/hf_human_upperbody', '--crop_type', 'upperbody', '--random_body_chop', '--loadSize', '512','--num_sample_inout', '2000']
+# job = executor.submit(trainerWrapper, cmd1)  
+# print(job.job_id)  # ID of your job
+
+# cmd1 = cmd + ['--name', 'cluster_upperbody256_v2_mse_crop12_1107', '--dataroot', './../../data/hf_human_upperbody', '--crop_type', 'upperbody', '--random_body_chop', '--loadSize', '256','--num_sample_inout', '0']
+# job = executor.submit(trainerWrapper, cmd1)  
+# print(job.job_id)  # ID of your job
+
+# cmd1 = cmd + ['--name', 'cluster_upperbody512_v2_mse_crop12_1107', '--dataroot', './../../data/hf_human_upperbody', '--crop_type', 'upperbody', '--random_body_chop', '--loadSize', '512','--num_sample_inout', '0']
+# job = executor.submit(trainerWrapper, cmd1)  
+# print(job.job_id)  # ID of your job
+
+cmd = base_cmd + ['--name', 'ablation_resnet_1115', '--batch_size', '16', '--netG', 'resnet', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2',\
+                '--z_size', '200.0', '--mask_ratio', '0.2', '--mlp_norm', 'batch', '--sigma_max', '5.0', '--sigma_min', '5.0',\
+                '--sampling_parts', '--num_sample_surface', '8000', '--num_sample_inout', '0', '--occ_loss_type', 'bce',\
+                '--uniform_ratio', '0.2', '--num_iter', '200000', '--schedule', '100000', '150000', '--learning_rate', '1e-3', '--resolution', '256',\
+                '--loadSize', '1024', '--sampling_mode', 'sigma3_uniform', '--mlp_dim', '1025', '1024', '512', '256', '128', '1']
+
+job = executor.submit(trainerWrapper, cmd)  
 print(job.job_id)  # ID of your job
 
-cmd1 = cmd + ['--name', 'cluster_upperbody512_mse_crop12_1107', '--dataroot', './../../data/hf_human_upperbody', '--crop_type', 'upperbody', '--random_body_chop', '--loadSize', '512','--num_sample_inout', '2000']
-job = executor.submit(trainerWrapper, cmd1)  
-print(job.job_id)  # ID of your job
-
-cmd1 = cmd + ['--name', 'cluster_upperbody256_v2_mse_crop12_1107', '--dataroot', './../../data/hf_human_upperbody', '--crop_type', 'upperbody', '--random_body_chop', '--loadSize', '256','--num_sample_inout', '0']
-job = executor.submit(trainerWrapper, cmd1)  
-print(job.job_id)  # ID of your job
-
-cmd1 = cmd + ['--name', 'cluster_upperbody512_v2_mse_crop12_1107', '--dataroot', './../../data/hf_human_upperbody', '--crop_type', 'upperbody', '--random_body_chop', '--loadSize', '512','--num_sample_inout', '0']
-job = executor.submit(trainerWrapper, cmd1)  
-print(job.job_id)  # ID of your job
-
-
+# job = executor.submit(evalWrapper, cmd)  
+# print(job.job_id)  # ID of your job
+# trainerWrapper(cmd)
 # eval
 
 # cmd = base_cmd + ['--name','cluster_wpitch', '--batch_size', '8', '--sp_enc_type', 'vol_enc', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '10.0', '--sigma_min', '2.0', '--no_numel_eval']

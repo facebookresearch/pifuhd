@@ -25,7 +25,6 @@ def train(opt):
     parser.print_options(opt)
 
     dataset = FRLFaceDataset(opt, phase='train')
-    print(len(dataset))
     # dataset = RPDatasetParts(opt, phase='train')
     # if opt.use_tsdf:
     #     dataset = RPTSDFDataset(opt, phase='train')

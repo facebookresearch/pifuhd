@@ -5,17 +5,23 @@ import json
 import math
 
 import numpy as np 
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageStat
 from PIL.ImageFilter import GaussianBlur
 import cv2
 import trimesh
 from numpy.linalg import inv
 
+from tqdm import tqdm
 import torch
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 
 from lib.sample_util import *
+
+import copy
+import gc
+
+g_mesh_dics = None
 
 def loadPoses(root, subjects):
     dic = {}
@@ -58,6 +64,7 @@ def crop_image(img, rect):
 
     return new_img[y:(y+h),x:(x+w),:]
 
+
 def face_crop(pts):
     flag = pts[:,2] > 0.2
 
@@ -87,7 +94,6 @@ def face_crop(pts):
         center = ps.mean(0)
     radius = int(1.4*np.max(np.sqrt(((ps - center[None,:])**2).reshape(-1,2).sum(0))))
 
-
     # radius = np.max(np.sqrt(((center[None] - np.stack([]))**2).sum(0))
     # radius = int(1.0*abs(center[1] - mshoulder[1]))
     center = center.astype(np.int)
@@ -99,6 +105,7 @@ def face_crop(pts):
 
     return (x1, y1, x2-x1, y2-y1)
 
+
 def upperbody_crop(pts):
     flag = pts[:,2] > 0.2
 
@@ -109,11 +116,10 @@ def upperbody_crop(pts):
         if flag[i]:
             ps.append(pts[i,:2])
 
-    # 1106: changed radius from 0.8 to 1.2
     center = mshoulder
     if len(ps) == 1:
         ps = np.stack(ps, 0)
-        radius = int(1.2*np.max(np.sqrt(((ps - center[None,:])**2).reshape(-1,2).sum(1))))
+        radius = int(1.0*np.max(np.sqrt(((ps - center[None,:])**2).reshape(-1,2).sum(1))))
     else:
         ps = []
         pts_id = [0, 2, 5]
@@ -122,7 +128,7 @@ def upperbody_crop(pts):
             if flag[i]:
                 ps.append(pts[i,:2])
         ps = np.stack(ps, 0)
-        radius = int(1.2*np.max(np.sqrt(((ps - center[None,:])**2).reshape(-1,2).sum(1)) / np.array(ratio)))
+        radius = int(1.0*np.max(np.sqrt(((ps - center[None,:])**2).reshape(-1,2).sum(1)) / np.array(ratio)))
 
     center = center.astype(np.int)
 
@@ -133,33 +139,6 @@ def upperbody_crop(pts):
 
     return (x1, y1, x2-x1, y2-y1)
 
-# def upperbody_crop(pts):
-#     mshoulder = pts[1,:2]
-#     nflag = pts[0,2] > 0.2
-#     lflag = pts[17,2] > 0.2
-#     rflag = pts[18,2] > 0.2
-
-#     rear = pts[18,:2]
-#     lear = pts[17,:2]
-#     top = pts[0,:2]
-#     if not nflag and lflag and rflag:
-#         top = 0.5 * (rear + lear)
-#     elif lflag:
-#         top = lear
-#     elif rflag:
-#         top = rear
-
-
-#     center = mshoulder
-#     radius = int(2.5*np.sqrt(((center - top)**2).sum(0)))
-#     center = center.astype(np.int)
-
-#     x1 = center[0] - radius
-#     x2 = center[0] + radius
-#     y1 = center[1] - radius
-#     y2 = center[1] + radius
-
-#     return (x1, y1, x2-x1, y2-y1)
 
 def fullbody_crop(pts):
     pts = pts[pts[:,2] > 0.2]
@@ -176,8 +155,38 @@ def fullbody_crop(pts):
 
     return (x1, y1, x2-x1, y2-y1)
 
+
+def load_trimesh(root, n_verts='100k', interval=0):
+    folders = os.listdir(os.path.join(root, 'GEO', 'OBJ'))
     
-class RPDatasetParts(Dataset):
+    meshes = {}
+    cnt = 0
+    mesh_dics = []
+    failed_list = []
+    for i, f in enumerate(folders):
+        sub_name = f[:-8] 
+        print(sub_name)
+        obj_path = os.path.join(root, 'GEO', 'OBJ', f, '%s_%s.obj' % (sub_name, n_verts))
+        if os.path.exists(obj_path):
+            try:
+                mesh = trimesh.load(obj_path)
+                meshes[sub_name] = trimesh.Trimesh(mesh.vertices, mesh.faces)
+            except:
+                failed_list.append(sub_name)
+                print('mesh load failed %s' % sub_name)
+        if interval != 0 and i % interval == 0 and i != 0:
+            mesh_dics.append(meshes)
+            meshes = {}
+    
+    if len(meshes) != 0:
+        mesh_dics.append(meshes)
+    
+    print('failed subject')
+    print(failed_list)
+
+    return mesh_dics
+    
+class RPDatasetPartsMRV2(Dataset):
     @staticmethod
     def modify_commandline_options(parser, is_train):
         return parser
@@ -229,12 +238,12 @@ class RPDatasetParts(Dataset):
         
         self.bg_list = [f for f in os.listdir(self.BG) if '.jpg' in f]
 
+        self.load_size_big = self.opt.loadSizeBig
         self.load_size = self.opt.loadSize
+        self.load_size_local = self.opt.loadSizeLocal
 
-        self.num_views = self.opt.num_views
-
-        self.num_sample_surface = self.opt.num_sample_surface
         self.num_sample_inout = self.opt.num_sample_inout
+        self.num_sample_surface = self.opt.num_sample_surface
         self.num_sample_color = self.opt.num_sample_color
         self.num_sample_normal = self.opt.num_sample_normal
 
@@ -251,14 +260,8 @@ class RPDatasetParts(Dataset):
 
         # PIL to tensor
         self.to_tensor = transforms.Compose([
-            transforms.Resize(self.load_size),
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-        ])
-
-        self.to_tensor_mask = transforms.Compose([
-            transforms.Resize(self.load_size),
-            transforms.ToTensor()
         ])
 
         # augmentation
@@ -267,6 +270,21 @@ class RPDatasetParts(Dataset):
             saturation=opt.aug_sat, hue=opt.aug_hue),
             transforms.RandomGrayscale(opt.aug_gry),
         ])
+
+        self.DICT = os.path.join(os.path.join(self.root, 'GEO', 'npy_files'))
+        global g_mesh_dics
+        if g_mesh_dics is None:
+            g_mesh_dics = {}
+            if not os.path.isdir(self.DICT):
+                os.makedirs(self.DICT,exist_ok=True)
+                mesh_dic = load_trimesh(self.root)
+                for i, dic in enumerate(mesh_dic):
+                    np.save(os.path.join(self.DICT, 'trimesh_dic%d.npy' % i), dic)
+                    g_mesh_dics.update(dic)
+            else:
+                print('loading mesh_dic...', self.opt.num_pts_dic)
+                for i in tqdm(range(self.opt.num_pts_dic)):
+                    g_mesh_dics = {**g_mesh_dics, **(np.load(os.path.join(self.DICT, 'trimesh_dic%d.npy' % i),allow_pickle=True).item())}
     
     def get_subjects(self):
         all_subjects = set(os.listdir(self.RENDER))
@@ -288,7 +306,7 @@ class RPDatasetParts(Dataset):
     def __len__(self):
         return len(self.subjects) * len(self.yaw_list) * len(self.pitch_list)
 
-    def get_render(self, sid, num_views, pid=0, view_id=None, random_sample=False):
+    def get_render(self, sid, vid=0, pid=0, random_sample=False):
         '''
         Return render data
         args:
@@ -303,218 +321,255 @@ class RPDatasetParts(Dataset):
             'mask': None, # [num_views, 1, H, W] segmentation masks
         '''
         subject = self.subjects[sid]
-        if view_id is None:
-            view_id = random.choice(self.yaw_list)
-        # views are sampled evenly unless random_sample is enabled
-        view_ids = [self.yaw_list[(view_id + len(self.yaw_list) // num_views * offset) % len(self.yaw_list)]
-                    for offset in range(num_views)]
-        if random_sample:
-            view_ids = np.random.choices(self.yaw_list, num_views)
-
         pitch = self.pitch_list[pid]
+        vid = self.yaw_list[vid]
 
         pose3d = self.poses[subject]
 
-        calib_list = []
-        render_list = []
-        mask_list = []
-        extrinsic_list = []
-        file_list = []
-        for vid in view_ids:
-            param_path = os.path.join(self.PARAM, subject, '%d_%d_%02d.npy' % (vid, pitch, 0))
-            render_path = os.path.join(self.RENDER, subject, '%d_%d_%02d.png' % (vid, pitch, 0))
+        param_path = os.path.join(self.PARAM, subject, '%d_%d_%02d.npy' % (vid, pitch, 0))
+        render_path = os.path.join(self.RENDER, subject, '%d_%d_%02d.png' % (vid, pitch, 0))
 
-            with open(os.path.join(self.POSE2D, subject, '%d_%d_%02d_keypoints.json' % (vid, pitch, 0))) as json_file:
-                data = json.load(json_file)['people'][0]
-                keypoints = np.array(data['pose_keypoints_2d']).reshape(-1,3)
+        with open(os.path.join(self.POSE2D, subject, '%d_%d_%02d_keypoints.json' % (vid, pitch, 0))) as json_file:
+            data = json.load(json_file)['people'][0]
+            keypoints = np.array(data['pose_keypoints_2d']).reshape(-1,3)
 
-                flags = keypoints[:,2] > 0.5
+            flags = keypoints[:,2] > 0.5
 
-                nflag = flags[0]
-                mflag = flags[1]
+            nflag = flags[0]
+            mflag = flags[1]
 
-                check_id = [2, 5, 15, 16, 17, 18]
-                cnt = sum(flags[check_id])
-                if self.opt.crop_type == 'face' and (not (nflag and cnt > 3)):
-                    raise IOError('face should be front')
-                if self.opt.crop_type == 'upperbody' and (not (mflag and nflag and cnt > 3)):
-                    raise IOError('face should be front')
-                if self.opt.crop_type == 'fullbody' and sum(flags) < 15:
-                    raise IOError('sufficient keypoints are not detected')
-                
-
-            # load calibration data
-            param = np.load(param_path, allow_pickle=True)
-            # pixel unit / world unit
-            ortho_ratio = param.item().get('ortho_ratio')
-            # world unit / model unit
-            scale = param.item().get('scale')
-            # camera center world coordinate
-            center = param.item().get('center')
-            # model rotation
-            R = param.item().get('R')
-
-            translate = -np.matmul(R, center).reshape(3, 1)
-            extrinsic = np.concatenate([R, translate], axis=1)
-            extrinsic = np.concatenate([extrinsic, np.array([0, 0, 0, 1]).reshape(1, 4)], 0)
-            # make sure camera space matches with pixel coordinates [-loadSize//2, loadSize]
-            scale_intrinsic = np.identity(4)
-            scale_intrinsic[0, 0] = scale / ortho_ratio
-            scale_intrinsic[1, 1] = -scale / ortho_ratio # due to discripancy between OpenGL and CV
-            scale_intrinsic[2, 2] = scale / ortho_ratio
-
-            im = cv2.imread(render_path, cv2.IMREAD_UNCHANGED)
-            h, w = im.shape[:2]
-
-            # transformation from pixe space to normalized space [-1, 1]
-            ndc_intrinsic = np.identity(4)
-            scale_im2ndc = 1.0 / float(w // 2)
-            ndc_intrinsic[0, 0] = scale_im2ndc
-            ndc_intrinsic[1, 1] = scale_im2ndc
-            ndc_intrinsic[2, 2] = scale_im2ndc
+            check_id = [2, 5, 15, 16, 17, 18]
+            cnt = sum(flags[check_id])
+            if self.opt.crop_type == 'face' and (not (nflag and cnt > 3)):
+                raise IOError('face should be front')
+            if self.opt.crop_type == 'upperbody' and (not (mflag and nflag and cnt > 3)):
+                raise IOError('face should be front')
+            if self.opt.crop_type == 'fullbody' and sum(flags) < 15:
+                raise IOError('sufficient keypoints are not detected %d' % sum(flags))
             
-            # transformation in normalized coordinates
-            trans_intrinsic = np.identity(4)
+        # load calibration data
+        param = np.load(param_path, allow_pickle=True)
+        # pixel unit / world unit
+        ortho_ratio = param.item().get('ortho_ratio')
+        # world unit / model unit
+        scale = param.item().get('scale')
+        # camera center world coordinate
+        center = param.item().get('center')
+        # model rotation
+        R = param.item().get('R')
 
-            intrinsic = np.matmul(scale_intrinsic, ndc_intrinsic)
+        translate = -np.matmul(R, center).reshape(3, 1)
+        extrinsic = np.concatenate([R, translate], axis=1)
+        extrinsic = np.concatenate([extrinsic, np.array([0, 0, 0, 1]).reshape(1, 4)], 0)
+        # make sure camera space matches with pixel coordinates [-loadSize//2, loadSize]
+        scale_intrinsic = np.identity(4)
+        scale_intrinsic[0, 0] = scale / ortho_ratio
+        scale_intrinsic[1, 1] = -scale / ortho_ratio # due to discripancy between OpenGL and CV
+        scale_intrinsic[2, 2] = scale / ortho_ratio
 
-            # for rendering with different resolution
-            param_wb_path = os.path.join(self.PARAM_WB, subject, '%d_%d_%02d.npy' % (vid, pitch, 0))
-            param_wb = np.load(param_wb_path, allow_pickle=True)
+        im = cv2.imread(render_path, cv2.IMREAD_UNCHANGED)
+        h, w = im.shape[:2]
 
-            # camera center world coordinate
-            dp = np.matmul(R, (center - param_wb.item().get('center'))[:,None])[:,0]
-            dp[0] *= -1.0
-            s = scale / param_wb.item().get('scale')
-            keypoints[:,:2] = s * (keypoints[:,:2] + param_wb.item().get('scale') * dp[None,:2] / ortho_ratio - 512) + 512
+        # transformation from pixe space to normalized space [-1, 1]
+        ndc_intrinsic = np.identity(4)
+        scale_im2ndc = 1.0 / float(w // 2)
+        ndc_intrinsic[0, 0] = scale_im2ndc
+        ndc_intrinsic[1, 1] = scale_im2ndc
+        ndc_intrinsic[2, 2] = scale_im2ndc
+        
+        # transformation in normalized coordinates
+        trans_intrinsic = np.identity(4)
 
-            trans_mat = np.identity(4)
-            rect = self.crop_func(keypoints)
+        intrinsic = np.matmul(scale_intrinsic, ndc_intrinsic)
 
-            im = crop_image(im, rect)
+        # for rendering with different resolution
+        param_wb_path = os.path.join(self.PARAM_WB, subject, '%d_%d_%02d.npy' % (vid, pitch, 0))
+        param_wb = np.load(param_wb_path, allow_pickle=True)
 
-            scale = w / rect[2]
-            trans_mat *= scale
-            trans_mat[3,3] = 1.0
-            trans_mat[0, 3] = -scale*(rect[0] + rect[2]//2 - w//2) * scale_im2ndc
-            trans_mat[1, 3] = -scale*(rect[1] + rect[3]//2 - h//2) * scale_im2ndc
+        # camera center world coordinate
+        dp = np.matmul(R, (center - param_wb.item().get('center'))[:,None])[:,0]
+        dp[0] *= -1.0
+        s = scale / param_wb.item().get('scale')
+        keypoints[:,:2] = s * (keypoints[:,:2] + param_wb.item().get('scale') * dp[None,:2] / ortho_ratio - 512) + 512
+
+        trans_mat = np.identity(4)
+        rect = self.crop_func(keypoints)
+
+        im = crop_image(im, rect)
+
+        scale = w / rect[2]
+        trans_mat *= scale
+        trans_mat[3,3] = 1.0
+        trans_mat[0, 3] = -scale*(rect[0] + rect[2]//2 - w//2) * scale_im2ndc
+        trans_mat[1, 3] = -scale*(rect[1] + rect[3]//2 - h//2) * scale_im2ndc
+        
+        intrinsic = np.matmul(trans_mat, intrinsic)
+
+        im = im / 255.0
+        im[:,:,:3] /= im[:,:,3:] + 1e-8
+        im = (255.0 * im).astype(np.uint8)[:,:,[2,1,0,3]]
+
+        render = Image.fromarray(im[:,:,:3]).convert('RGB')
+        mask = Image.fromarray(im[:,:,3]).convert('L')
+        tw, th = render.size
+        dx, dy = 0, 0
+        if self.is_train:
+            # pad images
+            w, h = render.size
+
+            # random flip
+            if self.opt.random_flip and np.random.rand() > 0.5 and self.is_train:
+                intrinsic[0, :] *= -1
+                render = transforms.RandomHorizontalFlip(p=1.0)(render)
+                mask = transforms.RandomHorizontalFlip(p=1.0)(mask)
+
+            # random scale 
+            if self.opt.random_scale:
+                rand_scale = random.uniform(0.95, 1.05)
+                w = int(rand_scale * w)
+                h = int(rand_scale * h)
+                render = render.resize((w, h), Image.BILINEAR)
+                mask = mask.resize((w, h), Image.NEAREST)
+                intrinsic[:3,:] *= rand_scale
             
-            if self.opt.random_body_chop and np.random.rand() > 0.5 and self.is_train:
-                y_offset = random.randint(-int(0.1*im.shape[0]),0)
-                if y_offset != 0:
-                    im[y_offset:,:,3] = 0.0
+            if self.opt.random_rotate:
+                rotate_degree = (random.random()-0.5) * 10.0
+                theta = -(rotate_degree/180.) * np.pi
+                rotMatrix = np.array([[np.cos(theta), -np.sin(theta)], 
+                                    [np.sin(theta),  np.cos(theta)]])
+                center = np.array([[render.size[0]/2,render.size[1]/2]])
+                rot_matrix = np.identity(4)
+                rot_matrix[:2,:2] = rotMatrix
 
-            im = im / 255.0
-            im[:,:,:3] /= im[:,:,3:] + 1e-8
-            im = (255.0 * im).astype(np.uint8)[:,:,[2,1,0,3]]
+                intrinsic = np.matmul(rot_matrix, intrinsic)
+                render = render.rotate(rotate_degree, Image.BILINEAR)
+                mask = mask.rotate(rotate_degree, Image.BILINEAR)
 
-            intrinsic = np.matmul(trans_mat, intrinsic)
-            
-            im = cv2.resize(im, (512, 512))
+            # # random translate in the pixel space
+            if self.opt.random_trans:
+                pad_size = int(0.08 * tw)
+                render = ImageOps.expand(render, pad_size, fill=0)
+                mask = ImageOps.expand(mask, pad_size, fill=0)
 
-            render = Image.fromarray(im[:,:,:3]).convert('RGB')
-            mask = Image.fromarray(im[:,:,3]).convert('L')
-                
-            tw, th = 512, 512
-            dx, dy = 0, 0
-            if self.is_train and self.num_views < 2:
-                # pad images
                 w, h = render.size
+                dx = random.randint(-int(round((w-tw)/4.0)),
+                                    int(round((w-tw)/4.0)))
+                dy = random.randint(-int(round((h-th)/4.0)),
+                                    int(round((h-th)/4.0)))
+                intrinsic[0, 3] += -dx / float(tw // 2)
+                intrinsic[1, 3] += -dy / float(th // 2)
 
-                # random flip
-                if self.opt.random_flip and np.random.rand() > 0.5 and self.is_train:
-                    intrinsic[0, :] *= -1
-                    render = transforms.RandomHorizontalFlip(p=1.0)(render)
-                    mask = transforms.RandomHorizontalFlip(p=1.0)(mask)
+        w, h = render.size    
+        x1 = int(round((w - tw) / 2.)) + dx
+        y1 = int(round((h - th) / 2.)) + dy
 
-                # random scale 
-                if self.opt.random_scale:
-                    rand_scale = random.uniform(0.95, 1.05)
-                    w = int(rand_scale * w)
-                    h = int(rand_scale * h)
-                    render = render.resize((w, h), Image.BILINEAR)
-                    mask = mask.resize((w, h), Image.BILINEAR)
-                    intrinsic[:3,:] *= rand_scale
+        render = render.crop((x1, y1, x1 + tw, y1 + th))
+        mask = mask.crop((x1, y1, x1 + tw, y1 + th))
+        
+        if self.opt.random_bg and len(self.bg_list) != 0 and self.is_train:                
+            bg_path = os.path.join(self.BG, random.choice(self.bg_list))
+        else:
+            uid = sid * len(self.yaw_list) * (vid * len(self.pitch_list) + pitch)
+            bg_path = os.path.join(self.BG, self.bg_list[uid % len(self.bg_list)])
+        bg = Image.open(bg_path).convert('RGB').resize((tw, th), Image.BILINEAR)
+        render = Image.composite(render, bg, mask)
+
+        if not self.num_sample_color and self.is_train:
+            # image augmentation
+            render = self.aug_trans(render)
+
+            if self.opt.aug_blur > 0.00001:
+                blur = GaussianBlur(np.random.uniform(0, self.opt.aug_blur))
+                render = render.filter(blur)
+
+        render_big = render.resize((self.load_size_big,self.load_size_big), Image.BILINEAR)
+        mask_big = mask.resize((self.load_size_big,self.load_size_big), Image.NEAREST)
+
+        pose_proj = np.matmul(np.concatenate([pose3d, np.ones_like(pose3d[:,:1])], 1), np.matmul(intrinsic, extrinsic).T)[:,:2]
+        pose_proj = self.load_size_big * (0.5 * pose_proj + 0.5)
+
+        # resize to load size
+        calib_local_list = []
+        render_local_list = []
+        mask_local_list = []
+        rect_list = []
+        if self.is_train:
+            mergin = (self.load_size_big-self.load_size_local)//2
+            cnt = 0
+            while len(calib_local_list) != self.opt.num_local:
+                cnt += 1
+                if cnt > 5 * self.opt.num_local:
+                    raise IOError('file has something wrong!')
+
+                if random.random() < 0.1:
+                    idx = random.choice([0,4,7])
+                    disp = pose_proj[idx] + np.random.normal(loc=0.0, scale=10.0, size=(2))
+                    disp = disp.astype(np.int32) - np.array([self.load_size_big//2,self.load_size_big//2])
+                    disp = disp.clip(min=-mergin, max=mergin)
+                    dx = disp[0]
+                    dy = disp[1]
+                else:
+                    dx = random.randint(-mergin,
+                                        mergin)
+                    dy = random.randint(-mergin,
+                                        mergin)
+
+                x1 = mergin + dx
+                y1 = mergin + dy
+
+                mask_local = mask_big.crop((x1, y1, x1 + self.load_size_local, y1 + self.load_size_local))
+                # at least 1% should be inside
+                if mask_local.getextrema()[1] != 255:
+                    continue
+                render_local = render_big.crop((x1, y1, x1 + self.load_size_local, y1 + self.load_size_local))
+                intrinsic_local = np.copy(intrinsic)
+                intrinsic_local[:3,:] *= self.load_size_big / self.load_size_local
+                intrinsic_local[0, 3] += -dx / float(self.load_size_local // 2)
+                intrinsic_local[1, 3] += -dy / float(self.load_size_local // 2)
                 
-                if self.opt.random_rotate:
-                    rotate_degree = (random.random()-0.5) * 10.0
-                    theta = -(rotate_degree/180.) * np.pi
-                    rotMatrix = np.array([[np.cos(theta), -np.sin(theta)], 
-                                        [np.sin(theta),  np.cos(theta)]])
-                    center = np.array([[render.size[0]/2,render.size[1]/2]])
-                    rot_matrix = np.identity(4)
-                    rot_matrix[:2,:2] = rotMatrix
+                calib_local = torch.Tensor(np.matmul(intrinsic_local, extrinsic)).float()
+                mask_local = transforms.ToTensor()(mask_local).float()
+                render_local = self.to_tensor(render_local)
 
-                    intrinsic = np.matmul(rot_matrix, intrinsic)
-                    render = render.rotate(rotate_degree, Image.BILINEAR)
-                    mask = mask.rotate(rotate_degree, Image.BILINEAR)
+                calib_local_list.append(calib_local)
+                mask_local_list.append(mask_local)
+                render_local_list.append(render_local)
 
-                # # random translate in the pixel space
-                if self.opt.random_trans:
-                    pad_size = int(0.08 * tw)
-                    render = ImageOps.expand(render, pad_size, fill=0)
-                    mask = ImageOps.expand(mask, pad_size, fill=0)
+                rect_list.append([x1, y1, x1 + self.load_size_local, y1 + self.load_size_local])
+        else:
+            calib_local = torch.Tensor(np.matmul(intrinsic, extrinsic)).float()
+            mask_local = transforms.ToTensor()(mask_big).float()
+            render_local = self.to_tensor(render_big)
 
-                    w, h = render.size
-                    dx = random.randint(-int(round((w-tw)/4.0)),
-                                        int(round((w-tw)/4.0)))
-                    dy = random.randint(-int(round((h-th)/4.0)),
-                                        int(round((h-th)/4.0)))
-                    trans_intrinsic = np.identity(4)
-                    intrinsic[0, 3] += -dx / float(tw // 2)
-                    intrinsic[1, 3] += -dy / float(th // 2)
+            calib_local_list.append(calib_local)
+            mask_local_list.append(mask_local)
+            render_local_list.append(render_local)
+            rect_list.append([0, 0, self.load_size_big, self.load_size_big])
 
-            w, h = render.size    
-            x1 = int(round((w - tw) / 2.)) + dx
-            y1 = int(round((h - th) / 2.)) + dy
+        w, h = render.size
+        render_global = render.resize((self.load_size, self.load_size), Image.BILINEAR)
+        mask_global = mask.resize((self.load_size, self.load_size), Image.NEAREST)
+        # intrinsic[:3,:] *= self.load_size / w
 
-            render = render.crop((x1, y1, x1 + tw, y1 + th))
-            mask = mask.crop((x1, y1, x1 + tw, y1 + th))
+        render_global = self.to_tensor(render_global)
+        mask_global = transforms.ToTensor()(mask_global).float()
+        calib_global = torch.Tensor(np.matmul(intrinsic, extrinsic)).float()
+        extrinsic = torch.Tensor(extrinsic).float()
 
-            if self.opt.random_bg and len(self.bg_list) != 0 and self.is_train:                
-                bg_path = os.path.join(self.BG, random.choice(self.bg_list))
-            else:
-                uid = sid * len(self.yaw_list) * (view_id * len(self.pitch_list) + pitch) 
-                bg_path = os.path.join(self.BG, self.bg_list[uid % len(self.bg_list)])
-            bg = Image.open(bg_path).convert('RGB')
-
-            render = Image.composite(render, bg, mask)
-
-            if not self.num_sample_color and self.is_train and self.num_views < 2:
-                # image augmentation
-                render = self.aug_trans(render)
-
-                if self.opt.aug_blur > 0.00001:
-                    blur = GaussianBlur(np.random.uniform(0, self.opt.aug_blur))
-                    render = render.filter(blur)
-
-            # intrinsic = np.matmul(trans_intrinsic, np.matmul(ndc_intrinsic, scale_intrinsic))
-            calib = torch.Tensor(np.matmul(intrinsic, extrinsic)).float()
-            extrinsic = torch.Tensor(extrinsic).float()
-
-            render = self.to_tensor(render)
-
-            mask = self.to_tensor_mask(mask)
-            mask_list.append(mask)
-
-            if not self.opt.random_bg or len(self.bg_list) == 0:                
-                render = mask.expand_as(render) * render
-
-            # img = render.permute(1,2,0).numpy()[:,:,::-1]
-            # cv2.imshow('image', (0.5*img + 0.5))
-            # cv2.waitKey(1)
-
-            render_list.append(render)
-            calib_list.append(calib)
-            extrinsic_list.append(extrinsic)
-            file_list.append(render_path)
+        # img = render.permute(1,2,0).numpy()[:,:,::-1]
+        # cv2.imshow('image', (0.5*img + 0.5))
+        # cv2.waitKey(1)
 
         return {
-            'img': torch.stack(render_list, dim=0),
-            'calib': torch.stack(calib_list, dim=0),
-            'extrinsic': torch.stack(extrinsic_list, dim=0),
-            'mask': torch.stack(mask_list, dim=0),
-            'files': file_list
+            'img_global': render_global,
+            'calib_global': calib_global,
+            'mask_global': mask_global,
+            'img_local': torch.stack(render_local_list, dim=0),
+            'calib_local': torch.stack(calib_local_list, dim=0),
+            'mask_local': torch.stack(mask_local_list, dim=0),
+            'extrinsic': extrinsic,
+            'files': render_path,
+            'rect': torch.LongTensor(rect_list)
         }
 
     def get_sample(self, subject, calib, mask=None):
@@ -609,7 +664,45 @@ class RPDatasetParts(Dataset):
             'ratio': ratio
         }
 
-    def get_normal_sampling(self, subject, calib):
+    def get_point_sampling(self, subject, calibs, num_files=100):
+        SAMPLE_DIR = os.path.join(self.SAMPLE, self.opt.sampling_mode, subject)
+
+        rand_idx = np.random.randint(num_files)
+        npy_file = os.path.join(SAMPLE_DIR, '%05d.io.npy' % rand_idx)
+
+        pts = np.load(npy_file, allow_pickle=True).item()
+
+        sample_points = np.concatenate([pts['in'],pts['out']], 0)
+        labels = np.concatenate([np.ones((pts['in'].shape[0],1)), np.zeros((pts['out'].shape[0], 1))], 0)
+
+        labels_list = []
+        samples_list = []
+        ptsh = np.matmul(calibs, np.concatenate([sample_points.T, np.ones((1,sample_points.shape[0]))],0))[:,:3,:]
+        inbb = (ptsh > -1) & (ptsh < 1)
+
+        for i in range(calibs.shape[0]):
+            inbb_i = inbb[i, 0] & inbb[i, 1]
+
+            sample_points_sub = sample_points[inbb_i]
+            labels_sub = labels[inbb_i]
+
+            if sample_points_sub.shape[0] == 0:
+                raise IOError('no overlap in the projection.')
+
+            if self.num_sample_surface:
+                sample_list = random.choices(range(0, sample_points_sub.shape[0] - 1), k=self.num_sample_surface)
+                sample_points_sub = sample_points_sub[sample_list]
+                labels_sub = labels_sub[sample_list]
+            
+            labels_list.append(torch.Tensor(labels_sub.T).float())
+            samples_list.append(torch.Tensor(sample_points_sub.T).float())
+
+        return {
+            'samples': torch.stack(samples_list, dim=0),
+            'labels': torch.stack(labels_list, dim=0)
+        }
+
+    def get_normal_sampling(self, subject, calibs, images):
         uv_pos_path = os.path.join(self.UV_POS, subject, '%02d.exr' % (0))
         uv_normal_path = os.path.join(self.UV_NORMAL, subject, '%02d.png' % (0))
         uv_mask_path = os.path.join(self.UV_MASK, subject, '%02d.png' % (0)) 
@@ -632,71 +725,35 @@ class RPDatasetParts(Dataset):
         surface_points = uv_pos[mask].T
         surface_normals = uv_normal[mask].T
 
-        ptsh = np.matmul(np.concatenate([surface_points.T, np.ones((surface_points.shape[1],1))], 1), calib.T)[:, :3]
-
-        inbb = (ptsh[:, 0] >= -1) & (ptsh[:, 0] <= 1) & (ptsh[:, 1] >= -1) & \
-               (ptsh[:, 1] <= 1) & (ptsh[:, 2] >= -1) & (ptsh[:, 2] <= 1)
-
-        surface_points = surface_points[:,inbb]
-        surface_normals = surface_normals[:,inbb]
-
-        if self.num_sample_normal:
-            sample_list = random.sample(range(0, surface_points.shape[1] - 1), self.num_sample_normal)
-            surface_points = surface_points[:,sample_list]
-            surface_normals = surface_normals[:,sample_list]
+        normals_list = []
+        samples_list = []   
         
-        normals = torch.Tensor(surface_normals).float()
-        samples = torch.Tensor(surface_points).float()
+        for i in range(calibs.shape[0]):
+            ptsh = np.matmul(np.concatenate([surface_points.T, np.ones((surface_points.shape[1],1))], 1), calibs[i].T)[:, :3]
+
+            inbb = (ptsh[:, 0] >= -1) & (ptsh[:, 0] <= 1) & (ptsh[:, 1] >= -1) & (ptsh[:, 1] <= 1)
+
+            surface_points_sub = surface_points[:,inbb]
+            surface_normals_sub = surface_normals[:,inbb]
+
+            if surface_points_sub.shape[1] == 0:
+                raise IOError('no overlap in the projection.')
+
+            if self.num_sample_normal:
+                sample_list = random.choices(range(0, surface_points_sub.shape[1] - 1), k=self.num_sample_normal)
+                surface_points_sub = surface_points_sub[:,sample_list]
+                surface_normals_sub = surface_normals_sub[:,sample_list]
+            
+            normals = torch.Tensor(surface_normals_sub).float()
+            samples = torch.Tensor(surface_points_sub).float()
+
+            normals_list.append(normals)
+            samples_list.append(samples)
 
         return {
-            'samples_nml': samples,
-            'labels_nml': normals
+            'samples_nml': torch.stack(samples_list, dim=0),
+            'labels_nml': torch.stack(normals_list, dim=0)
         }
-
-    def get_point_sampling(self, subject, calibs, sample_data=None, num_files=100):
-        if not self.is_train:
-            random.seed(1991)
-            np.random.seed(1991)
-
-        SAMPLE_DIR = os.path.join(self.SAMPLE, self.opt.sampling_mode, subject)
-
-        rand_idx = np.random.randint(num_files)
-        npy_file = os.path.join(SAMPLE_DIR, '%05d.io.npy' % rand_idx)
-
-        pts = np.load(npy_file, allow_pickle=True).item()
-
-        sample_points = np.concatenate([pts['in'],pts['out']], 0)
-        labels = np.concatenate([np.ones((pts['in'].shape[0],1)), np.zeros((pts['out'].shape[0], 1))], 0)
-
-        ptsh = np.matmul(calibs, np.concatenate([sample_points.T, np.ones((1,sample_points.shape[0]))],0))[:3,:]
-        inbb = (ptsh > -1) & (ptsh < 1)
-        inbb = inbb[0] & inbb[1]
-
-        sample_points_sub = sample_points[inbb]
-        labels_sub = labels[inbb]
-
-        if sample_points_sub.shape[0] == 0:
-            raise IOError('no overlap in the projection.')
-
-        if self.num_sample_surface:
-            sample_list = random.choices(range(0, sample_points_sub.shape[0] - 1), k=self.num_sample_surface)
-            sample_points_sub = sample_points_sub[sample_list]
-            labels_sub = labels_sub[sample_list]
-        
-        labels = torch.Tensor(labels_sub.T).float()
-        samples = torch.Tensor(sample_points_sub.T).float()
-
-        if sample_data is not None:
-            sample_data['samples'] = torch.cat([sample_data['samples'], samples],1)
-            sample_data['labels'] = torch.cat([sample_data['labels'], labels],1)
-            sample_data['ratio'] = 1.0 - sample_data['labels'].sum().item() / sample_data['labels'].size(1)
-            return sample_data
-        else:
-            return {
-                'samples': samples,
-                'labels': labels,
-                'ratio': 1 - labels.sum().item() /labels.size(1)
-            }
 
     def get_color_sampling(self, subject, calib, vid, pid=0):
         view_id = self.yaw_list[vid]
@@ -780,37 +837,35 @@ class RPDatasetParts(Dataset):
                 'b_min': self.B_MIN,
                 'b_max': self.B_MAX,
             }
-            render_data = self.get_render(sid, num_views=self.num_views, view_id=vid,
-                                        pid=pid, random_sample=self.opt.random_multiview)
+            render_data = self.get_render(sid, vid=vid, pid=pid)
             res.update(render_data)
-            if not self.num_sample_color and self.opt.num_sample_inout:
-                sample_data = self.get_sample(subject, render_data['calib'][0].numpy(), render_data['mask'][0].numpy()) 
-                sample_data = self.get_point_sampling(subject, render_data['calib'][0].numpy(), sample_data)
+            sample_data = self.get_point_sampling(subject, render_data['calib_local'].numpy())
+            if self.opt.num_sample_surface:
                 res.update(sample_data)
-            elif not self.num_sample_color:
-                sample_data = self.get_point_sampling(subject, render_data['calib'][0].numpy())
-                res.update(sample_data)
-            # p = sample_data['samples'].t().numpy()
-            # calib = render_data['calib'][0].numpy()
-            # mask = (255.0*(0.5*render_data['img'][0].permute(1,2,0).numpy()[:,:,::-1]+0.5)).astype(np.uint8)
-            # p = np.matmul(np.concatenate([p, np.ones((p.shape[0],1))], 1), calib.T)[:, :3]
-            # pts = mask.shape[0]*(0.5*p[sample_data['labels'].numpy().reshape(-1) == 1.0]+0.5)
-            # for p in pts:
-            #     mask = cv2.circle(mask, (int(p[0]),int(p[1])), 2, (0,255.0,0), -1)
-            # # mask = cv2.putText(mask, render_data['files'][0], (5, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 0, 0), lineType=cv2.LINE_AA) 
-            # cv2.imwrite('tmp.png', mask)
+            # for i in range(self.opt.num_local):
+            #     p = sample_data['samples'][i].t().numpy()
+            #     calib = render_data['calib_local'][i].numpy()
+            #     mask = (255.0*(0.5*render_data['img_local'][i].permute(1,2,0).numpy()[:,:,::-1]+0.5)).astype(np.uint8)
+            #     p = np.matmul(np.concatenate([p, np.ones((p.shape[0],1))], 1), calib.T)[:, :3]
+
+            #     pts = mask.shape[0]*(0.5*p[sample_data['labels'][i].numpy().reshape(-1) == 1.0]+0.5)
+            #     for p in pts:
+            #         mask = cv2.circle(mask, (int(p[0]),int(p[1])), 2, (0,255.0,0), -1)
+            #     mask = cv2.putText(mask, render_data['files'], (5, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 0, 0), lineType=cv2.LINE_AA) 
+            #     cv2.imwrite('tmp/%s_%d.png' % (subject, i), mask)
+            # exit()
             # exit()
             # cv2.waitKey(1000)
             
-            
             if self.num_sample_normal:
-                normal_data = self.get_normal_sampling(subject, render_data['calib'][0].numpy())
+                normal_data = self.get_normal_sampling(subject, render_data['calib_local'].numpy(), render_data['img_local'].numpy())
                 res.update(normal_data)
             if self.num_sample_color:
-                color_data = self.get_color_sampling(subject, render_data['calib'][0].numpy(), vid=vid)
+                color_data = self.get_color_sampling(subject, render_data['calib_local'].numpy(), vid=vid)
                 res.update(color_data)
             return res
         except Exception as e:
+            # print(e)
             for i in range(10):
                 try:
                     return self.get_item(index=random.randint(0, self.__len__() - 1)) 

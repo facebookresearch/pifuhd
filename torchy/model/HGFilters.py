@@ -94,7 +94,7 @@ class HourGlass(nn.Module):
         
 
 class HGFilter(nn.Module):
-    def __init__(self, stack, depth, last_ch, norm='batch', down_type='conv64', use_sigmoid=True, high_hg=False):
+    def __init__(self, stack, depth, in_ch, last_ch, norm='batch', down_type='conv64', use_sigmoid=True):
         super(HGFilter, self).__init__()
         self.n_stack = stack
         self.use_sigmoid = use_sigmoid
@@ -103,9 +103,9 @@ class HGFilter(nn.Module):
         self.norm = norm
         self.down_type = down_type
 
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3)
+        self.conv1 = nn.Conv2d(in_ch, 64, kernel_size=7, stride=2, padding=3)
 
-        last_ch = self.last_ch * (self.n_pixshuffle**2)
+        last_ch = self.last_ch
 
         if self.norm == 'batch':
             self.bn1 = nn.BatchNorm2d(64)
@@ -118,7 +118,7 @@ class HGFilter(nn.Module):
         elif self.down_type == 'conv128':
             self.conv2 = ConvBlock(128, 128, self.norm)
             self.down_conv2 = nn.Conv2d(128, 128, kernel_size=3, stride=2, padding=1)
-        elif self.down_type == 'ave_pool':
+        elif self.down_type == 'ave_pool' or self.down_type == 'no_down':
             self.conv2 = ConvBlock(64, 128, self.norm)
         
         self.conv3 = ConvBlock(128, 128, self.norm)
@@ -154,6 +154,8 @@ class HGFilter(nn.Module):
         elif self.down_type == ['conv64', 'conv128']:
             x = self.conv2(x)
             x = self.down_conv2(x)
+        elif self.down_type == 'no_down':
+            x = self.conv2(x)
         else:
             raise NameError('unknown downsampling type')
     
