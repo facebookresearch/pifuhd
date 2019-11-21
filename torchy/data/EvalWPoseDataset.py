@@ -134,12 +134,22 @@ def upperbody_crop(pts):
 #     return (x1, y1, x2-x1, y2-y1)
 
 def fullbody_crop(pts):
-    pts = pts[pts[:,2] > 0.2]
-    pmax = pts.max(0)
-    pmin = pts.min(0)
+    flags = pts[:,2] > 0.5
+    check_id = [11,19,21,22]
+    cnt = sum(flags[check_id])
 
-    center = (0.5 * (pmax[:2] + pmin[:2])).astype(np.int)
-    radius = int(0.65 * max(pmax[0]-pmin[0], pmax[1]-pmin[1]))
+    if cnt == 0:
+        center = pts[8,:2].astype(np.int)
+        pts = pts[pts[:,2] > 0.5][:,:2]
+        radius = int(1.45*np.sqrt(((center[None,:] - pts)**2).sum(1)).max(0))
+        center[1] += int(0.05*radius)
+    else:
+        pts = pts[pts[:,2] > 0.2]
+        pmax = pts.max(0)
+        pmin = pts.min(0)
+
+        center = (0.5 * (pmax[:2] + pmin[:2])).astype(np.int)
+        radius = int(0.65 * max(pmax[0]-pmin[0], pmax[1]-pmin[1]))
 
     x1 = center[0] - radius
     x2 = center[0] + radius
@@ -241,6 +251,7 @@ class EvalWPoseDataset(Dataset):
 
         im = crop_image(im, rect)
 
+
         scale_im2ndc = 1.0 / float(w // 2)
         scale = w / rect[2]
         trans_mat *= scale
@@ -251,6 +262,8 @@ class EvalWPoseDataset(Dataset):
         intrinsic = np.matmul(trans_mat, intrinsic)
         im_512 = cv2.resize(im, (512, 512))
         im = cv2.resize(im, (self.load_size, self.load_size))
+        cv2.imshow('crop', im_512)
+        cv2.waitKey(1)
 
         image_512 = Image.fromarray(im_512[:,:,::-1]).convert('RGB')
         image = Image.fromarray(im[:,:,::-1]).convert('RGB')
