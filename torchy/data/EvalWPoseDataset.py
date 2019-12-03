@@ -170,7 +170,6 @@ class EvalWPoseDataset(Dataset):
 
         self.root = self.opt.dataroot
         self.img_files = sorted([os.path.join(self.root,f) for f in os.listdir(self.root) if '.png' in f or '.jpg' in f])
-        # random.shuffle(self.img_files)
         self.IMG = os.path.join(self.root)
 
         self.phase = 'val'
@@ -189,8 +188,18 @@ class EvalWPoseDataset(Dataset):
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         ])
 
+        # only used in case of multi-person processing
+        self.person_id = 0
+
     def __len__(self):
         return len(self.img_files)
+
+    def get_n_person(self, index):
+        joint_path = self.img_files[index].replace('.%s' % (self.img_files[index].split('.')[-1]), '_keypoints.json')
+        # Calib
+        with open(joint_path) as json_file:
+            data = json.load(json_file)
+            return len(data['people'])            
 
     def get_item(self, index):
         img_path = self.img_files[index]
@@ -202,25 +211,32 @@ class EvalWPoseDataset(Dataset):
             data = json.load(json_file)
             if len(data['people']) == 0:
                 raise IOError('non human found!!')
-            largest_data = data['people'][0]
-            height = 0
-            if len(data['people']) != 1:
-                for i in range(len(data['people'])):
-                    tmp = data['people'][i]
-                    keypoints = np.array(tmp['pose_keypoints_2d']).reshape(-1,3)
+            
+            # if True, the person with the largest height will be chosen. 
+            # set to False for multi-person processing
+            if True:
+                selected_data = data['people'][0]
+                height = 0
+                if len(data['people']) != 1:
+                    for i in range(len(data['people'])):
+                        tmp = data['people'][i]
+                        keypoints = np.array(tmp['pose_keypoints_2d']).reshape(-1,3)
 
-                    flags = keypoints[:,2] > 0.5
-                    if sum(flags) == 0:
-                        continue
-                    bbox = keypoints[flags]
-                    bbox_max = bbox.max(0)
-                    bbox_min = bbox.min(0)
+                        flags = keypoints[:,2] > 0.5
+                        if sum(flags) == 0:
+                            continue
+                        bbox = keypoints[flags]
+                        bbox_max = bbox.max(0)
+                        bbox_min = bbox.min(0)
 
-                    if height < bbox_max[1] - bbox_min[1]:
-                        height = bbox_max[1] - bbox_min[1]
-                        largest_data = tmp
+                        if height < bbox_max[1] - bbox_min[1]:
+                            height = bbox_max[1] - bbox_min[1]
+                            selected_data = tmp
+            else:
+                pid = min(len(data['people'])-1, self.person_id)
+                selected_data = data['people'][pid]
 
-            keypoints = np.array(largest_data['pose_keypoints_2d']).reshape(-1,3)
+            keypoints = np.array(selected_data['pose_keypoints_2d']).reshape(-1,3)
 
             flags = keypoints[:,2] > 0.5
 
@@ -251,7 +267,6 @@ class EvalWPoseDataset(Dataset):
 
         im = crop_image(im, rect)
 
-
         scale_im2ndc = 1.0 / float(w // 2)
         scale = w / rect[2]
         trans_mat *= scale
@@ -262,8 +277,6 @@ class EvalWPoseDataset(Dataset):
         intrinsic = np.matmul(trans_mat, intrinsic)
         im_512 = cv2.resize(im, (512, 512))
         im = cv2.resize(im, (self.load_size, self.load_size))
-        cv2.imshow('crop', im_512)
-        cv2.waitKey(1)
 
         image_512 = Image.fromarray(im_512[:,:,::-1]).convert('RGB')
         image = Image.fromarray(im[:,:,::-1]).convert('RGB')

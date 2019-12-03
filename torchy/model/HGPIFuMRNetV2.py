@@ -214,8 +214,8 @@ class HGPIFuMRNetV2(BasePIFuNet):
         note that the current implementation use forward difference.
         args:
             points: [B1, B2, 3, N] 3d points in world space
-            calibs_local: [B1, B2, 3, 4] calibration matrices for each image
-            calibs_global: [B1, 3, 4] calibration matrices for each image
+            calibs_local: [B1, B2, 4, 4] calibration matrices for each image
+            calibs_global: [B1, 4, 4] calibration matrices for each image
             transforms: [B1, 2, 3] image space coordinate transforms
             labels: [B1, B2, 3, N] ground truth normal
             delta: perturbation for finite difference

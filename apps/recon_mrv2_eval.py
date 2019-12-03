@@ -121,12 +121,6 @@ def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True, compo
             calib_world = data['calib_world'].numpy()[0]
             verts = np.matmul(np.concatenate([verts, np.ones_like(verts[:,:1])],1), inv(calib_world).T)[:,:3]
 
-        # if not components:
-        #     net.calc_normal(verts_tensor, calib_tensor[:1])
-        #     color = net.nmls.detach().cpu().numpy()[0].T
-        # else:
-        #     nways = net.calc_comp_ids(verts_tensor, calib_tensor[:1])
-        #     color = label_to_color(nways[0].detach().cpu().numpy())
         xyz_tensor = net.projection(verts_tensor, calib_tensor[:1])
         uv = xyz_tensor[:, :2, :]
         color = index(image_tensor[:1], uv).detach().cpu().numpy()[0].T
@@ -169,7 +163,6 @@ def recon(opt):
 
     cuda = torch.device('cuda:%d' % opt.gpu_id)
 
-    # test_dataset = EvalDataset(opt)
     test_dataset = EvalRPDataset(opt)
 
     print('test data size: ', len(test_dataset))
