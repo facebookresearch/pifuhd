@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from ..net_util import *
 
 class ConvBlock(nn.Module):
-    def __init__(self, in_planes, out_planes, norm='batch'):
+    def __init__(self, in_planes, out_planes, norm='batch', n_group=32):
         super(ConvBlock, self).__init__()
         self.conv1 = conv3x3(in_planes, int(out_planes / 2))
         self.conv2 = conv3x3(int(out_planes / 2), int(out_planes / 4))
@@ -16,10 +16,10 @@ class ConvBlock(nn.Module):
             self.bn3 = nn.BatchNorm2d(int(out_planes / 4))
             self.bn4 = nn.BatchNorm2d(in_planes)
         elif norm == 'group':
-            self.bn1 = nn.GroupNorm(32, in_planes)
-            self.bn2 = nn.GroupNorm(32, int(out_planes / 2))
-            self.bn3 = nn.GroupNorm(32, int(out_planes / 4))
-            self.bn4 = nn.GroupNorm(32, in_planes)
+            self.bn1 = nn.GroupNorm(n_group, in_planes)
+            self.bn2 = nn.GroupNorm(n_group, int(out_planes / 2))
+            self.bn3 = nn.GroupNorm(n_group, int(out_planes / 4))
+            self.bn4 = nn.GroupNorm(n_group, in_planes)
         
         if in_planes != out_planes:
             self.downsample = nn.Sequential(
@@ -93,19 +93,22 @@ class HourGlass(nn.Module):
         return self._forward(self.depth, x)
         
 
-class HGFilter(nn.Module):
-    def __init__(self, stack, depth, in_ch, last_ch, norm='batch', down_type='conv64', use_sigmoid=True):
-        super(HGFilter, self).__init__()
+class HGHFilter(nn.Module):
+    def __init__(self, stack, depth, last_ch, last_ch_h, norm='batch', down_type='conv64', use_sigmoid=True, use_attention=False, n_pixshuffle=1):
+        super(HGHFilter, self).__init__()
         self.n_stack = stack
         self.use_sigmoid = use_sigmoid
+        self.use_attention = use_attention
         self.depth = depth
         self.last_ch = last_ch
+        self.last_ch_h = last_ch_h
         self.norm = norm
+        self.n_pixshuffle = n_pixshuffle
         self.down_type = down_type
 
-        self.conv1 = nn.Conv2d(in_ch, 64, kernel_size=7, stride=2, padding=3)
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3)
 
-        last_ch = self.last_ch
+        last_ch = self.last_ch * (self.n_pixshuffle**2)
 
         if self.norm == 'batch':
             self.bn1 = nn.BatchNorm2d(64)
@@ -118,12 +121,14 @@ class HGFilter(nn.Module):
         elif self.down_type == 'conv128':
             self.conv2 = ConvBlock(128, 128, self.norm)
             self.down_conv2 = nn.Conv2d(128, 128, kernel_size=3, stride=2, padding=1)
-        elif self.down_type == 'ave_pool' or self.down_type == 'no_down':
+        elif self.down_type == 'ave_pool':
             self.conv2 = ConvBlock(64, 128, self.norm)
         
         self.conv3 = ConvBlock(128, 128, self.norm)
         self.conv4 = ConvBlock(128, 256, self.norm)
         
+        self.conv_h = nn.Conv2d(64, last_ch_h, kernel_size=1, stride=1, padding=0)
+
         # start stacking
         for stack in range(self.n_stack):
             self.add_module('m' + str(stack), HourGlass(self.depth, 256, self.norm))
@@ -137,7 +142,7 @@ class HGFilter(nn.Module):
                 self.add_module('bn_end' + str(stack), nn.GroupNorm(32, 256))
             
             self.add_module('l' + str(stack),
-                            nn.Conv2d(256, last_ch, 
+                            nn.Conv2d(256, last_ch  if not self.use_attention else last_ch + 1, 
                             kernel_size=1, stride=1, padding=0))
             
             if stack < self.n_stack - 1:
@@ -149,18 +154,16 @@ class HGFilter(nn.Module):
     def forward(self, x):
         x = F.relu(self.bn1(self.conv1(x)), True)
 
+        normx = self.conv_h(x.detach())
+
         if self.down_type == 'ave_pool':
             x = F.avg_pool2d(self.conv2(x), 2, stride=2)
         elif self.down_type == ['conv64', 'conv128']:
             x = self.conv2(x)
             x = self.down_conv2(x)
-        elif self.down_type == 'no_down':
-            x = self.conv2(x)
         else:
             raise NameError('unknown downsampling type')
     
-        normx = x
-
         x = self.conv3(x)
         x = self.conv4(x)
 
@@ -177,11 +180,17 @@ class HGFilter(nn.Module):
                        (self._modules['conv_last' + str(i)](ll)), True)
 
             tmp_out = self._modules['l' + str(i)](ll)
+            if self.use_attention:
+                tmp_out = nn.Sigmoid()(tmp_out[:,-1:]) * tmp_out[:,:-1]
+
 
             if self.use_sigmoid:
                 outputs.append(nn.Tanh()(tmp_out))
             else:
-                outputs.append(tmp_out)
+                if self.n_pixshuffle != 1:
+                    outputs.append(nn.PixelShuffle(self.n_pixshuffle)(tmp_out))
+                else:
+                    outputs.append(tmp_out)
             
             if i < self.n_stack - 1:
                 ll = self._modules['bl' + str(i)](ll)

@@ -20,8 +20,9 @@ from lib.sample_util import *
 from torchy.data import *
 from torchy.model import *
 from torchy.geometry import index
+from tqdm import tqdm
 
-opt = BaseOptions().parse()
+parser = BaseOptions()
 
 def precompute_points(opt):
     cuda = torch.device('cuda:%d' % opt.gpu_id)
@@ -31,6 +32,7 @@ def precompute_points(opt):
     subjects = dataset.get_subjects()
     
     print('# of subjects: ', len(subjects))
+<<<<<<< HEAD
     dataset.opt.simga = 5
     dataset.opt.sampleing_mode = 'uniform_simga5'
 
@@ -50,6 +52,10 @@ def precompute_points(opt):
     #             dataset.precompute_points(sub, num_files=10)
     #         except:
     #             print('failed', sub)
+=======
+    for sub in tqdm(subjects):
+        dataset.precompute_points(sub, num_files=2, start_id=2*opt.tmp_id, sigma=3.0)
+>>>>>>> upperbody
 
 def precompute_tsdf(opt):
     cuda = torch.device('cuda:%d' % opt.gpu_id)
@@ -61,8 +67,23 @@ def precompute_tsdf(opt):
     for sub in subjects:
         dataset.precompute_tsdf(sub, num_files=100, sigma=3.0)
 
+def pgWrapper(args=None):
+    opt = parser.parse(args)
+    precompute_points(opt)
+
+import submitit
+def submit():
+    base_cmd =['--dataroot', './../../data/hf_human_big/', '--num_sample_inout', '500000', '--sampling_mode', 'sigma3_uniform']
+
+    executor = submitit.AutoExecutor(folder="tmp_cluster_log")  # submission interface (logs are dumped in the folder)
+    executor.update_parameters(timeout_min=3*60, gpus_per_node=1, cpus_per_task=10, partition="priority", name='wildPIFu', comment='cvpr deadline')  # timeout in min
+
+    for i in range(0,50):
+        cmd = base_cmd + ['--tmp_id', '%d' % i]
+        # pgWrapper(cmd)
+        job = executor.submit(pgWrapper, cmd)  
+        print(job.job_id)  # ID of your job
 
 if __name__ == '__main__':
-    precompute_points(opt)
-    # precompute_tsdf(opt)
+    submit()
   

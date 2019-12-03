@@ -87,10 +87,10 @@ class BasePIFuNet(nn.Module):
         '''
         return self.preds
 
-    def get_error(self):
+    def get_error(self, gamma=None):
         '''
         return the loss given the ground truth labels and prediction
         '''
-        return self.error_term(self.preds, self.labels)
+        return self.error_term(self.preds, self.labels, gamma)
 
     

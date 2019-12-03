@@ -88,18 +88,28 @@ def reshape_sample_tensor(sample_tensor, num_views):
     return sample_tensor
 
 def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True, components=False):
+    image_tensor_global = data['img_512'].to(device=cuda)
     image_tensor = data['img'].to(device=cuda)
     calib_tensor = data['calib'].to(device=cuda)
 
-    net.filter(image_tensor)
+    net.filter_global(image_tensor_global)
+    net.filter_local(image_tensor[:,None])
 
+    try:
+        if net.netG.netF is not None:
+            image_tensor_global = torch.cat([image_tensor_global, net.netG.nmlF], 0)
+        if net.netG.netB is not None:
+            image_tensor_global = torch.cat([image_tensor_global, net.netG.nmlB], 0)
+    except:
+        pass
+    
     b_min = data['b_min']
     b_max = data['b_max']
     try:
         save_img_path = save_path[:-4] + '.png'
         save_img_list = []
-        for v in range(image_tensor.shape[0]):
-            save_img = (np.transpose(image_tensor[v].detach().cpu().numpy(), (1, 2, 0)) * 0.5 + 0.5)[:, :, ::-1] * 255.0
+        for v in range(image_tensor_global.shape[0]):
+            save_img = (np.transpose(image_tensor_global[v].detach().cpu().numpy(), (1, 2, 0)) * 0.5 + 0.5)[:, :, ::-1] * 255.0
             save_img_list.append(save_img)
         save_img = np.concatenate(save_img_list, axis=1)
         cv2.imwrite(save_img_path, save_img)
@@ -111,16 +121,18 @@ def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True, compo
             calib_world = data['calib_world'].numpy()[0]
             verts = np.matmul(np.concatenate([verts, np.ones_like(verts[:,:1])],1), inv(calib_world).T)[:,:3]
 
-        # if not components:
-        #     net.calc_normal(verts_tensor, calib_tensor[:1])
-        #     color = net.nmls.detach().cpu().numpy()[0].T
-        # else:
-        #     nways = net.calc_comp_ids(verts_tensor, calib_tensor[:1])
-        #     color = label_to_color(nways[0].detach().cpu().numpy())
-        xyz_tensor = net.projection(verts_tensor, calib_tensor[:1])
-        uv = xyz_tensor[:, :2, :]
-        color = index(image_tensor[:1], uv).detach().cpu().numpy()[0].T
-        color = color * 0.5 + 0.5
+        color = np.zeros(verts.shape)
+        interval = 100000
+        for i in range(len(color) // interval + 1):
+            left = i * interval
+            if i == len(color) // interval:
+                right = -1
+            else:
+                right = (i + 1) * interval
+            net.calc_normal(verts_tensor[:, None, :, left:right], calib_tensor[:,None], calib_tensor)
+            nml = net.nmls.detach().cpu().numpy()[0] * 0.5 + 0.5
+            color[left:right] = nml.T
+
         save_obj_mesh_with_color(save_path, verts, faces, color)
     except Exception as e:
         print(e)
@@ -129,14 +141,17 @@ def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True, compo
 def recon(opt):
     # load checkpoints
     state_dict_path = None
-    if opt.load_netG_checkpoint_path is not None:
-        state_dict_path = opt.load_netG_checkpoint_path
+    if opt.load_netMR_checkpoint_path is not None:
+        state_dict_path = opt.load_netMR_checkpoint_path
     elif opt.resume_epoch < 0:
         state_dict_path = '%s/%s_train_latest' % (opt.checkpoints_path, opt.name)
         opt.resume_epoch = 0
     else:
         state_dict_path = '%s/%s_train_epoch_%d' % (opt.checkpoints_path, opt.name, opt.resume_epoch)
     
+    start_id = opt.start_id
+    end_id = opt.end_id
+
     state_dict = None
     if state_dict_path is not None and os.path.exists(state_dict_path):
         print('Resuming from ', state_dict_path)
@@ -146,10 +161,13 @@ def recon(opt):
             dataroot = opt.dataroot
             resolution = opt.resolution
             results_path = opt.results_path
+            loadSize = opt.loadSize
+            
             opt = state_dict['opt']
             opt.dataroot = dataroot
             opt.resolution = resolution
             opt.results_path = results_path
+            opt.loadSize = loadSize
     else:
         raise Exception('failed loading state dict!', state_dict_path)
     
@@ -163,7 +181,19 @@ def recon(opt):
     print('test data size: ', len(test_dataset))
     projection_mode = test_dataset.projection_mode
 
-    netG = HGHPIFuNet(opt, projection_mode).to(device=cuda)
+    opt_netG = state_dict['opt_netG']
+    netG = HGPIFuNetwNML(opt_netG, projection_mode).to(device=cuda)
+
+    if 'hg_ablation' in opt.netG:
+        netMR = HGPIFuMRNetAblation(opt, projection_mode)
+    elif 'resblk_ablation' in opt.netG:
+        netMR = ResBlkPIFuMRNetAblation(opt, projection_mode)
+    elif 'hg' in opt.netG:
+        netMR = HGPIFuMRNetV2(opt, netG, projection_mode)
+    elif 'resblk' in opt.netG:
+        netMR = ResBlkPIFuMRNet(opt, netG, projection_mode)
+
+    netMR = netMR.to(device=cuda)
 
     def set_eval():
         netG.eval()
@@ -171,22 +201,39 @@ def recon(opt):
     # load checkpoints
     if state_dict is not None:
         if 'model_state_dict' in state_dict:
-            netG.load_state_dict(state_dict['model_state_dict'])
+            netMR.load_state_dict(state_dict['model_state_dict'])
         else: # this is deprecated but keep it for now.
-            netG.load_state_dict(state_dict)
+            netMR.load_state_dict(state_dict)
 
     os.makedirs(opt.checkpoints_path, exist_ok=True)
     os.makedirs(opt.results_path, exist_ok=True)
     os.makedirs('%s/%s/recon' % (opt.results_path, opt.name), exist_ok=True)
+
+    if start_id < 0:
+        start_id = 0
+    if end_id < 0:
+        end_id = len(test_dataset)
 
     ## test
     with torch.no_grad():
         set_eval()
 
         print('generate mesh (test) ...')
-        for test_data in tqdm(test_dataset):
-            save_path = '%s/%s/recon/result_%s.obj' % (opt.results_path, opt.name, test_data['name'])
-            gen_mesh(opt.resolution, netG, cuda, test_data, save_path, components=opt.use_compose)
+        for i in tqdm(range(start_id, end_id)):
+            if i >= len(test_dataset):
+                break
+            
+            # for multi-person processing, set it to False
+            if True:
+                test_data = test_dataset[i]
+                save_path = '%s/%s/recon/result_%s.obj' % (opt.results_path, opt.name, test_data['name'])
+                gen_mesh(opt.resolution, netMR, cuda, test_data, save_path, components=opt.use_compose)
+            else:
+                for j in range(test_dataset.get_n_person(i)):
+                    test_dataset.person_id = j
+                    test_data = test_dataset[i]
+                    save_path = '%s/%s/recon/result_%s_%d.obj' % (opt.results_path, opt.name, test_data['name'], j)
+                    gen_mesh(opt.resolution, netMR, cuda, test_data, save_path, components=opt.use_compose)
 
 def reconWrapper(args=None):
     opt = parser.parse(args)

@@ -12,6 +12,12 @@ import torch
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 
+def loadPoses(root, subjects):
+    dic = {}
+    for sub in subjects:
+        dic[sub] = np.load(os.path.join(root, '%s_100k.npy' % sub))
+
+    return dic
 
 class RPDataset(Dataset):
     @staticmethod
@@ -37,14 +43,21 @@ class RPDataset(Dataset):
         self.SAMPLE = os.path.join(self.root, 'GEO', 'SAMPLE')
         self.TSDF = os.path.join(self.root, 'GEO', 'TSDF')
         self.BG = os.path.join(self.root, 'BG')
+        self.POSE = os.path.join(self.root, 'POSE')
         
         self.B_MIN = np.array([-128, -28, -128])
         self.B_MAX = np.array([128, 228, 128])
         # self.B_MIN = np.array([-120, -20, -64])
         # self.B_MAX = np.array([120, 220, 64])
 
-        file = open(os.path.join(self.root,'info.txt'),'r')
+        try:
+            file = open(os.path.join(self.root,'info.txt'),'r')
+        except:
+            raise IOError('%s does not exist!' % os.path.join(self.root,'info.txt'))
+
         lines = [f.strip() for f in file.readlines()]
+        self.yaw_list = []
+        self.pitch_list = []
         for l in lines:
             tmp = l.split(',')
             if tmp[0] == 'pitch' and phase in tmp[1]:
@@ -64,6 +77,8 @@ class RPDataset(Dataset):
 
         self.subjects = self.get_subjects()
 
+        self.poses = loadPoses(self.POSE, self.subjects)
+
         # PIL to tensor
         self.to_tensor = transforms.Compose([
             transforms.Resize(self.load_size),
@@ -81,7 +96,8 @@ class RPDataset(Dataset):
     def get_subjects(self):
         all_subjects = set(os.listdir(self.RENDER))
         if os.path.exists(os.path.join(self.root, 'val.txt')):
-            var_subjects = set(np.loadtxt(os.path.join(self.root, 'val.txt'), dtype=str))
+            arr = np.atleast_1d(np.loadtxt(os.path.join(self.root, 'val.txt'), dtype=str))
+            var_subjects = set(arr)
         else:
             var_subjects = set([])
 
@@ -122,6 +138,8 @@ class RPDataset(Dataset):
 
         pitch = self.pitch_list[pid]
 
+        pose3d = self.poses[subject]
+
         calib_list = []
         render_list = []
         mask_list = []
@@ -159,10 +177,18 @@ class RPDataset(Dataset):
             
             # transformation in normalized coordinates
             trans_intrinsic = np.identity(4)
-            
+
+            intrinsic = np.matmul(ndc_intrinsic, scale_intrinsic)
+            calib = np.matmul(intrinsic, extrinsic)
+            pose2d = np.matmul(calib, np.concatenate([pose3d, np.ones_like(pose3d[:,:1])], 1).T)
+
             im = cv2.imread(render_path, cv2.IMREAD_UNCHANGED) / 255.0
             im[:,:,:3] /= im[:,:,3:] + 1e-8
             im = (255.0 * im).astype(np.uint8)[:,:,[2,1,0,3]]
+            if self.opt.random_body_chop and np.random.rand() > 0.5 and self.is_train:
+                y_offset = random.randint(-100,0)
+                if y_offset != 0:
+                    im[y_offset:,:,3] = 0.0
             render = Image.fromarray(im[:,:,:3]).convert('RGB')
             mask = Image.fromarray(im[:,:,3]).convert('L')
 
@@ -193,26 +219,43 @@ class RPDataset(Dataset):
 
                 # random scale 
                 if self.opt.random_scale:
-                    rand_scale = random.uniform(0.9, 1.1)
+                    rand_scale = random.uniform(0.8, 1.4)
                     w = int(rand_scale * w)
                     h = int(rand_scale * h)
                     render = render.resize((w, h), Image.BILINEAR)
                     mask = mask.resize((w, h), Image.NEAREST)
                     scale_intrinsic *= rand_scale
                     scale_intrinsic[3, 3] = 1
+                
+                if self.opt.random_rotate:
+                    rotate_degree = (random.random()-0.5) * 2 * 10.0
+                    theta = -(rotate_degree/180.) * np.pi
+                    rotMatrix = np.array([[np.cos(theta), -np.sin(theta)], 
+                                        [np.sin(theta),  np.cos(theta)]])
+                    center = np.array([[render.size[0]/2,render.size[1]/2]])
+                    rot_matrix = np.identity(4)
+                    rot_matrix[:2,:2] = rotMatrix
+
+                    scale_intrinsic = np.matmul(rot_matrix, scale_intrinsic)
+                    render = render.rotate(rotate_degree, Image.BILINEAR)
+                    mask = mask.rotate(rotate_degree, Image.BILINEAR)
 
                 # random translate in the pixel space
                 if self.opt.random_trans:
-                    dx = random.randint(-int(round((w-tw)/10.0)),
-                                        int(round((w-tw)/10.0)))
-                    dy = random.randint(-int(round((h-th)/10.0)),
-                                        int(round((h-th)/10.0)))
+                    padding = int(1.1 * tw - w)
+                    if padding > 0:
+                        render = ImageOps.expand(render, border=(padding,padding), fill=0)
+                        mask = ImageOps.expand(mask, border=(padding, padding), fill=0)
+                    w, h = render.size
+                    dx = random.randint(-int(round((w-tw)/8.0)),
+                                        int(round((w-tw)/8.0)))
+                    dy = random.randint(-int(round((h-th)/8.0)),
+                                        int(round((h-th)/8.0)))
+                    trans_intrinsic[0, 3] = (-dx) / float(self.opt.loadSize // 2)
+                    trans_intrinsic[1, 3] = (-dy) / float(self.opt.loadSize // 2)
                 else:
                     dx = 0
                     dy = 0
-
-                trans_intrinsic[0, 3] = -dx / float(self.opt.loadSize // 2)
-                trans_intrinsic[1, 3] = -dy / float(self.opt.loadSize // 2)
 
                 x1 = int(round((w - tw) / 2.)) + dx
                 y1 = int(round((h - th) / 2.)) + dy
@@ -239,6 +282,10 @@ class RPDataset(Dataset):
 
             if not self.opt.random_bg or len(self.bg_list) == 0:                
                 render = mask.expand_as(render) * render
+
+            # img = render.permute(1,2,0).numpy()[:,:,::-1]
+            # cv2.imshow('image', (0.5*img + 0.5))
+            # cv2.waitKey(1)
 
             render_list.append(render)
             calib_list.append(calib)
@@ -404,7 +451,18 @@ class RPDataset(Dataset):
             }
             render_data = self.get_render(sid, num_views=self.num_views, view_id=vid,
                                         pid=pid, random_sample=self.opt.random_multiview)
-            sample_data = self.select_sampling_method(subject, render_data['calib'][0].numpy())        
+            sample_data = self.select_sampling_method(subject, render_data['calib'][0].numpy(), render_data['mask'][0].numpy())        
+            # p = sample_data['samples'].t().numpy()
+            # calib = render_data['calib'][0].numpy()
+            # mask = 255.0*np.stack(3*[render_data['mask'][0,0].numpy()],2)
+            # p = np.matmul(np.concatenate([p, np.ones((p.shape[0],1))], 1), calib.T)[:, :3]
+            # pts = 512*(0.5*p[sample_data['labels'].numpy().reshape(-1) == 1.0]+0.5)
+            # print(pts.shape)
+            # for p in pts:
+            #     mask = cv2.circle(mask, (int(p[0]),int(p[1])), 2, (0,255,0), -1)
+            # print(mask.shape)
+            # cv2.imwrite('tmp.png', mask)
+            # exit()
             res.update(render_data)
             res.update(sample_data)
             if self.num_sample_normal:

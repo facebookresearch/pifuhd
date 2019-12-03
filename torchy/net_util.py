@@ -66,3 +66,77 @@ def get_norm_layer(norm_type='instance'):
         raise NotImplementedError('normalization layer [%s] is not found' % norm_type)
     return norm_layer
 
+class CustomBCELoss(nn.Module):
+    def __init__(self, brock=False, gamma=None):
+        super(CustomBCELoss, self).__init__()
+        self.brock = brock
+        self.gamma = gamma
+
+    def forward(self, pred, gt, gamma, w=None):
+        x_hat = torch.clamp(pred, 1e-5, 1.0-1e-5) # prevent log(0) from happening
+        gamma = gamma[:,None,None] if self.gamma is None else self.gamma
+        if self.brock:
+            x = 3.0*gt - 1.0 # rescaled to [-1,2]
+
+            loss = -(gamma*x*torch.log(x_hat) + (1.0-gamma)*(1.0-x)*torch.log(1.0-x_hat))
+        else:
+            loss = -(gamma*gt*torch.log(x_hat) + (1.0-gamma)*(1.0-gt)*torch.log(1.0-x_hat))
+
+        if w is not None:
+            if len(w.size()) == 1:
+                w = w[:,None,None] 
+            return (loss * w).mean()
+        else:
+            return loss.mean()
+
+class CustomMSELoss(nn.Module):
+    def __init__(self, gamma=None):
+        super(CustomMSELoss, self).__init__()
+        self.gamma = gamma
+
+    def forward(self, pred, gt, gamma, w=None):
+        gamma = gamma[:,None,None] if self.gamma is None else self.gamma
+        weight = gamma * gt + (1.0-gamma) * (1 - gt)
+        loss = (weight * (pred - gt).pow(2)).mean()
+
+        if w is not None:
+            return (loss * w).mean()
+        else:
+            return loss.mean()
+
+def createMLP(dims, norm='bn', activation='relu', last_op=nn.Tanh(), dropout=False):
+    act = None
+    if activation == 'relu':
+        act = nn.ReLU()
+    if activation == 'lrelu':
+        act = nn.LeakyReLU()
+    if activation == 'selu':
+        act = nn.SELU()
+    if activation == 'elu':
+        act = nn.ELU()
+    if activation == 'prelu':
+        act = nn.PReLU()
+
+    mlp = []
+    for i in range(1,len(dims)):
+        if norm == 'bn':
+            mlp += [  nn.Linear(dims[i-1], dims[i]),
+                    nn.BatchNorm1d(dims[i])]
+        if norm == 'in':
+            mlp += [  nn.Linear(dims[i-1], dims[i]),
+                    nn.InstanceNorm1d(dims[i])]
+        if norm == 'wn':
+            mlp += [  nn.utils.weight_norm(nn.Linear(dims[i-1], dims[i]), name='weight')]
+        if norm == 'none':
+            mlp += [ nn.Linear(dims[i-1], dims[i])]
+        
+        if i != len(dims)-1:
+            if act is not None:
+                mlp += [act]
+            if dropout:
+                mlp += [nn.Dropout(0.2)]
+
+    if last_op is not None:
+        mlp += [last_op]
+
+    return mlp

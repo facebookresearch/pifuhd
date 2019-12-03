@@ -29,7 +29,9 @@ class Simple3DNet(nn.Module):
         self.conv2 = DownConv3D(in_ch*2, in_ch*4, norm) # 8x8x8
         self.conv3 = DownConv3D(in_ch*4, in_ch*4, norm) # 4x4x4
 
-        self.fc = nn.Linear(in_ch*4*(4**3), (out_res**3)*out_ch, bias=False)
+        self.pool = nn.AvgPool3d(2)
+        
+        self.conv_last = nn.Conv3d(in_ch*4, out_ch, kernel_size=1, bias=False)
 
     def forward(self, x):
         B = x.size(0)
@@ -38,6 +40,7 @@ class Simple3DNet(nn.Module):
         x = self.conv2(x)
         x = self.conv3(x)
 
-        x = self.fc(x.view(B,-1))
+        x = self.pool(x)
+        x = self.conv_last(x)
 
-        return x.view(B, self.out_ch, self.out_res, self.out_res, self.out_res)
+        return x

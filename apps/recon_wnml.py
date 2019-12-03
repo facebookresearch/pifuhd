@@ -25,6 +25,7 @@ from lib.sample_util import *
 from torchy.data import *
 from torchy.model import *
 from torchy.geometry import index
+import torchy.networks as networks
 
 from PIL import Image
 import torchvision.transforms as transforms
@@ -92,7 +93,10 @@ def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True, compo
     calib_tensor = data['calib'].to(device=cuda)
 
     net.filter(image_tensor)
-
+    if net.opt.use_front_normal:
+        image_tensor = torch.cat([image_tensor, net.nmlF], 0)
+    if net.opt.use_back_normal:
+        image_tensor = torch.cat([image_tensor, net.nmlB], 0)
     b_min = data['b_min']
     b_max = data['b_max']
     try:
@@ -111,12 +115,6 @@ def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True, compo
             calib_world = data['calib_world'].numpy()[0]
             verts = np.matmul(np.concatenate([verts, np.ones_like(verts[:,:1])],1), inv(calib_world).T)[:,:3]
 
-        # if not components:
-        #     net.calc_normal(verts_tensor, calib_tensor[:1])
-        #     color = net.nmls.detach().cpu().numpy()[0].T
-        # else:
-        #     nways = net.calc_comp_ids(verts_tensor, calib_tensor[:1])
-        #     color = label_to_color(nways[0].detach().cpu().numpy())
         xyz_tensor = net.projection(verts_tensor, calib_tensor[:1])
         uv = xyz_tensor[:, :2, :]
         color = index(image_tensor[:1], uv).detach().cpu().numpy()[0].T
@@ -163,7 +161,13 @@ def recon(opt):
     print('test data size: ', len(test_dataset))
     projection_mode = test_dataset.projection_mode
 
-    netG = HGHPIFuNet(opt, projection_mode).to(device=cuda)
+    try:
+        if opt.use_aio_normal:
+            netG = HGPIFuNetwNMLAIO(opt, projection_mode).to(device=cuda)
+        else:
+            netG = HGPIFuNetwNML(opt, projection_mode).to(device=cuda)
+    except:
+        netG = HGPIFuNetwNML(opt, projection_mode).to(device=cuda)
 
     def set_eval():
         netG.eval()

@@ -158,12 +158,17 @@ def recon(opt):
     cuda = torch.device('cuda:%d' % opt.gpu_id)
 
     # test_dataset = EvalDataset(opt)
-    test_dataset = EvalWPoseDataset(opt)
+    test_dataset = EvalRPDataset(opt)
 
     print('test data size: ', len(test_dataset))
     projection_mode = test_dataset.projection_mode
 
-    netG = HGHPIFuNet(opt, projection_mode).to(device=cuda)
+    if opt.netG == 'hghpifu':
+        netG = HGHPIFuNet(opt, projection_mode)
+    elif opt.netG == 'resnet':
+        netG = ResNetPIFuNet(opt, projection_mode)
+    else:
+        netG = HGPIFuNet(opt, projection_mode)
 
     def set_eval():
         netG.eval()
@@ -174,6 +179,13 @@ def recon(opt):
             netG.load_state_dict(state_dict['model_state_dict'])
         else: # this is deprecated but keep it for now.
             netG.load_state_dict(state_dict)
+    
+    if opt.netG == 'hghpifu':
+        tmp = netG
+        netG = HGPIFuNet(opt, projection_mode)
+        netG.loadFromHGHPIFu(tmp)
+
+    netG.to(device=cuda)
 
     os.makedirs(opt.checkpoints_path, exist_ok=True)
     os.makedirs(opt.results_path, exist_ok=True)

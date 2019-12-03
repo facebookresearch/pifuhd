@@ -21,7 +21,9 @@ from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 
 from tqdm import tqdm
-from .RPDataset import RPDataset
+# from .RPDataset import RPDataset
+from .RPDatasetParts import RPDatasetParts as RPDataset
+from lib.sample_util import *
 
 import gc
 
@@ -86,6 +88,44 @@ def load_trimesh(root, n_verts='100k', interval=0):
 
     return mesh_dics
 
+def sample_around_linesegment(p1, p2, radius, n, tmin=0.0, tmax=1.0):
+    '''
+    args:
+        p1: [3] np.array
+        p2: [3] np.array
+        radius: sampling radius
+        n: # samples
+    return:
+        [n, 3] sampled points on the line segment
+    '''
+    p = np.stack([p1, p2],1)
+    p_max = p.max(1)
+    p_min = p.min(1)
+    p_min -= radius
+    p_max += radius
+    bbox_size = p_max - p_min
+    q = bbox_size[None,:] * np.random.rand(5*n,3) + p_min
+    l = ((p2-p1)**2).sum()
+    t = (np.matmul(q-p1[None,:],(p2 - p1)[:,None]) / l).clip(max=tmax, min=tmin)
+    p = p1[None,:] + t * ((p2-p1)[None,:])
+    mask = ((p-q)**2).sum(1) <= radius * radius
+
+    return q[mask][:n]
+
+def sample_around_point(p, radius, n):
+    '''
+    args:
+        p: [3] np.array
+        radius: sampling radius
+        n: # samples
+    return:
+        [n, 3]: sampling points around p
+    '''
+    disp = (2.0 * np.random.rand(2*n,3) - 1.0)
+    disp = disp[(disp**2).sum(1) <= 1.0][:n]
+
+    return radius * disp + p[None,:]
+
 class RPOtfDataset(RPDataset):
     @staticmethod
     def modify_commandline_options(parser, is_train):
@@ -108,12 +148,14 @@ class RPOtfDataset(RPDataset):
                 for i in tqdm(range(self.opt.num_pts_dic)):
                     g_mesh_dics = {**g_mesh_dics, **(np.load(os.path.join(self.DICT, 'trimesh_dic%d.npy' % i),allow_pickle=True).item())}
     
-    def precompute_points(self, subject, num_files=100):
+    def precompute_points(self, subject, num_files=1, start_id=0, sigma=None):
+        if sigma is None:
+            sigma = self.opt.sigma
         SAMPLE_DIR = os.path.join(self.SAMPLE, self.opt.sampling_mode, subject)
 
         mesh = copy.deepcopy(g_mesh_dics[subject])
         ratio = 0.8
-        for i in tqdm(range(num_files)):
+        for i in range(start_id, start_id+num_files):
             data_file = os.path.join(SAMPLE_DIR, '%05d.io.npy' % i)
             if 'sigma' in self.opt.sampling_mode:
                 surface_points, fid = trimesh.sample.sample_surface(mesh, int(ratio * self.num_sample_inout))
@@ -123,7 +165,7 @@ class RPOtfDataset(RPDataset):
                 y = np.sin(phi) * np.sin(theta)
                 z = np.cos(phi)
                 dir = np.stack([x,y,z],1)
-                radius = np.random.normal(scale=self.opt.sigma, size=[surface_points.shape[0],1])
+                radius = np.random.normal(scale=sigma, size=[surface_points.shape[0],1])
                 sample_points = surface_points + radius * dir
             if self.opt.sampling_mode == 'uniform':
                 # add random points within image space
@@ -189,15 +231,39 @@ class RPOtfDataset(RPDataset):
             np.save(tsdf_file, sample_points)
               
 
-    def select_sampling_method(self, subject, calib):
+    def select_sampling_method(self, subject, calib, mask=None):
         # test only
         if not self.is_train:
             random.seed(1991)
             np.random.seed(1991)
         mesh = copy.deepcopy(g_mesh_dics[subject])
-        ratio = 0.8
+        poses = self.poses[subject]
+
+        ratio = 1.0 - self.opt.uniform_ratio
         if 'sigma' in self.opt.sampling_mode:
-            surface_points, fid = trimesh.sample.sample_surface_even(mesh, int(1.4 * ratio * self.num_sample_inout))
+            sample_size = int(2.0 * ratio * self.num_sample_inout)
+            surface_points = None
+            for i in range(10):
+                sample_points, fid = trimesh.sample.sample_surface(mesh, int(5 * sample_size))
+                ptsh = np.matmul(np.concatenate([sample_points, np.ones((sample_points.shape[0],1))], 1), calib.T)[:, :3]
+                inbb = (ptsh[:, 0] >= -1) & (ptsh[:, 0] <= 1) & (ptsh[:, 1] >= -1) & \
+                        (ptsh[:, 1] <= 1) & (ptsh[:, 2] >= -1) & (ptsh[:, 2] <= 1)
+                x = (self.load_size * (0.5 * ptsh[:,0] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
+                y = (self.load_size * (0.5 * ptsh[:,1] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
+                idx = y * self.load_size + x
+                inmask = mask.reshape(-1)[idx] > 0
+                inmask = inmask & inbb
+                sample_points = sample_points[inmask]
+                if surface_points is None:
+                    surface_points = sample_points
+                else:
+                    surface_points = np.concatenate([surface_points, sample_points], 0)
+                if surface_points.shape[0] >= sample_size:
+                    surface_points = surface_points[:sample_size]
+                    break
+                if i == 9:
+                    raise IOError('failed surface point sampling')
+            # surface_points, fid = trimesh.sample.sample_surface(mesh, int(4.0 * ratio * self.num_sample_inout))
             theta = 2.0 * math.pi * np.random.rand(surface_points.shape[0])
             phi = np.arccos(1 - 2 * np.random.rand(surface_points.shape[0]))
             x = np.sin(phi) * np.cos(theta)
@@ -206,6 +272,27 @@ class RPOtfDataset(RPDataset):
             dir = np.stack([x,y,z],1)
             radius = np.random.normal(scale=self.opt.sigma if self.is_train else 3.0, size=[surface_points.shape[0],1])
             sample_points = surface_points + radius * dir
+        if 'arm' in self.opt.sampling_mode:
+            # 5-6, 6-7, 2-3, 3-4
+            arm_idx = [[5,6,0.0,1.0],[6,7,0.0,1.2],[2,3,0.0,1.0],[3,4,0.0,1.2]]
+            points = []
+            for idx in arm_idx:
+                points.append(sample_around_linesegment(poses[idx[0]], poses[idx[1]], 20.0, self.num_sample_inout//4, idx[2], idx[3]))
+            points.append(sample_points)
+            sample_points = np.concatenate(points, 0)
+        if 'face' in self.opt.sampling_mode:
+            points = sample_around_point(poses[0], 10.0, self.num_sample_inout//8)
+            sample_points = np.concatenate([sample_points, points], 0)
+        if mask is not None and 'mask' in self.opt.sampling_mode:
+            ptsh = np.matmul(np.concatenate([sample_points, np.ones((sample_points.shape[0],1))], 1), calib.T)[:, :3]
+            x = (self.load_size * (0.5 * ptsh[:,0] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
+            y = (self.load_size * (0.5 * ptsh[:,1] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
+            idx = y * self.load_size + x
+            inmask = mask.reshape(-1)[idx] > 0
+            points_inmask = sample_points[inmask]
+            points_outmask = sample_points[np.logical_not(inmask)]
+            out_idxs = np.random.randint(0,points_outmask.shape[0],size=(int(self.opt.mask_ratio*points_outmask.shape[0])))
+            sample_points = np.concatenate([points_inmask, points_outmask[out_idxs]], 0)
         if self.opt.sampling_mode == 'uniform':
             # add random points within image space
             random_points = np.concatenate(
@@ -217,33 +304,49 @@ class RPOtfDataset(RPDataset):
         elif 'uniform' in self.opt.sampling_mode:
             # add random points within image space
             random_points = np.concatenate(
-                [2.0 * np.random.rand(int((1.0-ratio)*self.num_sample_inout), 3) - 1.0, np.ones((int((1.0-ratio)*self.num_sample_inout), 1))],
+                [2.0 * np.random.rand(int(2.0*(1.0-ratio)*self.num_sample_inout), 3) - 1.0, np.ones((int(2.0*(1.0-ratio)*self.num_sample_inout), 1))],
                 1)  # [-1,1]
             random_points = np.matmul(random_points, inv(calib).T)[:, :3]
             # length = self.B_MAX - self.B_MIN
             # random_points = np.random.rand(self.num_sample_inout // 4, 3) * length + self.B_MIN
             sample_points = np.concatenate([sample_points, random_points], 0)
-            np.random.shuffle(sample_points)
+        np.random.shuffle(sample_points)
 
-        inbb = np.matmul(np.concatenate([sample_points, np.ones((sample_points.shape[0],1))], 1), calib.T)[:, :3]
-        inbb = (inbb[:, 0] >= -1) & (inbb[:, 0] <= 1) & (inbb[:, 1] >= -1) & \
-               (inbb[:, 1] <= 1) & (inbb[:, 2] >= -1) & (inbb[:, 2] <= 1)
+        ptsh = np.matmul(np.concatenate([sample_points, np.ones((sample_points.shape[0],1))], 1), calib.T)[:, :3]
+        inbb = (ptsh[:, 0] >= -1) & (ptsh[:, 0] <= 1) & (ptsh[:, 1] >= -1) & \
+               (ptsh[:, 1] <= 1) & (ptsh[:, 2] >= -1) & (ptsh[:, 2] <= 1)
 
         sample_points = sample_points[inbb]
+        sample_points = sample_points[:self.num_sample_inout]
         inside = mesh.contains(sample_points)
+
+        if mask is not None:
+            ptsh = ptsh[inbb][:self.num_sample_inout]
+            x = (self.load_size * (0.5 * ptsh[:,0] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
+            y = (self.load_size * (0.5 * ptsh[:,1] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
+            idx = y * self.load_size + x
+            inmask = mask.reshape(-1)[idx] > 0
+            inside = inside & inmask
+        
         inside_points = sample_points[inside]
         outside_points = sample_points[np.logical_not(inside)]
 
-        nin = inside_points.shape[0]
-        inside_points = inside_points[
-                        :self.num_sample_inout // 2] if nin > self.num_sample_inout // 2 else inside_points
-        outside_points = outside_points[
-                         :self.num_sample_inout // 2] if nin > self.num_sample_inout // 2 else outside_points[
-                             :(self.num_sample_inout - nin)]    
-
+        # total_size = sample_points.shape[0]
+        # print(inside_points.shape[0]/total_size, outside_points.shape[0]/total_size)
+        # nin = inside_points.shape[0]
+        # inside_points = inside_points[
+        #                 :self.num_sample_inout // 2] if nin > self.num_sample_inout // 2 else inside_points
+        # outside_points = outside_points[
+        #                  :self.num_sample_inout // 2] if nin > self.num_sample_inout // 2 else outside_points[
+        #                      :(self.num_sample_inout - nin)]
         samples = np.concatenate([inside_points, outside_points], 0).T # [3, N]
-        samples = torch.Tensor(samples).float()
         labels = np.concatenate([np.ones((1, inside_points.shape[0])), np.zeros((1, outside_points.shape[0]))], 1)
+        ratio = outside_points.shape[0]/samples.shape[0]
+
+        # save_samples_truncted_prob('test.ply', samples.T, labels.T)
+        # exit()
+        # cv2.waitKey(0)
+        samples = torch.Tensor(samples).float()
         labels = torch.Tensor(labels).float()
         
         del mesh
@@ -251,4 +354,5 @@ class RPOtfDataset(RPDataset):
         return {
             'samples': samples,
             'labels': labels,
+            'ratio': ratio
         }

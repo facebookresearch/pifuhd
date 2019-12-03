@@ -8,8 +8,10 @@ from .DepthNormalizer import DepthNormalizer
 from .HGFilters import *
 from .VolumetricEncoder import *
 from ..net_util import init_net
+from ..networks import define_G
+import cv2
 
-class HGPIFuNet(BasePIFuNet):
+class HGPIFuNetwNMLAIO(BasePIFuNet):
     '''
     HGPIFu uses stacked hourglass as an image encoder.
     '''
@@ -19,15 +21,24 @@ class HGPIFuNet(BasePIFuNet):
                  projection_mode='orthogonal',
                  criteria={'occ': nn.MSELoss()}
                  ):
-        super(HGPIFuNet, self).__init__(
+        super(HGPIFuNetwNMLAIO, self).__init__(
             projection_mode=projection_mode,
             criteria=criteria)
 
         self.name = 'hg_pifu'
 
+        in_ch = 3
+        try:
+            if opt.use_front_normal:
+                in_ch += 3
+            if opt.use_back_normal:
+                in_ch += 3
+        except:
+            pass
+
         self.opt = opt
         self.num_views = self.opt.num_views
-        self.image_filter = HGFilter(opt.num_stack, opt.hg_depth, 3, opt.hg_dim, 
+        self.image_filter = HGFilter(opt.num_stack, opt.hg_depth, in_ch, opt.hg_dim, 
                                      opt.norm, opt.hg_down, False)
 
         self.mlp = MLP(
@@ -39,9 +50,7 @@ class HGPIFuNet(BasePIFuNet):
             last_op=nn.Sigmoid(),
             compose=self.opt.use_compose)
 
-        if self.opt.sp_enc_type == 'vol':
-            self.spatial_enc = VolumetricEncoder(opt)
-        elif self.opt.sp_enc_type == 'z':
+        if self.opt.sp_enc_type == 'z':
             self.spatial_enc = DepthNormalizer(opt)
         else:
             raise NameError('unknown spatial encoding type')
@@ -54,7 +63,12 @@ class HGPIFuNet(BasePIFuNet):
         self.intermediate_preds_list = []
 
         init_net(self)
-    
+
+        self.netFB = define_G(3, 9, 64, "global", 4, 9, 1, 3, "instance")
+
+        self.nmlF = None
+        self.nmlB = None
+        self.clrB = None
 
     def loadFromHGHPIFu(self, net):
         hgnet = net.image_filter
@@ -80,6 +94,7 @@ class HGPIFuNet(BasePIFuNet):
         model_dict = self.mlp.state_dict()
 
         pretrained_dict = {k: v for k, v in net.mlp.state_dict().items() if k in model_dict}                    
+
         for k, v in pretrained_dict.items():                      
             if v.size() == model_dict[k].size():
                 model_dict[k] = v
@@ -101,14 +116,29 @@ class HGPIFuNet(BasePIFuNet):
         args:
             images: [B, C, H, W]
         '''
-        if self.opt.sp_enc_type == 'vol':
-            self.spatial_enc.filter(images)
+        nmls = []
+        # if you wish to train jointly, remove detach etc.
+        with torch.no_grad():
+            out = self.netFB.forward(images).detach()
+            self.nmlB = out[:,:3,:,:]
+            self.nmlF = out[:,3:6,:,:]
+            self.clrB = out[:,6:,:,:]
+
+            if self.opt.use_front_normal:
+                nmls.append(self.nmlF)
+            if self.opt.use_back_normal:
+                nmls.append(self.nmlB)
+
+        if len(nmls) != 0:
+            nmls = torch.cat(nmls,1)
+            if images.size()[2:] != nmls.size()[2:]:
+                nmls = nn.Upsample(size=images.size()[2:], mode='bilinear')(nmls)
+            images = torch.cat([images,nmls],1)
 
         self.im_feat_list, self.normx = self.image_filter(images)
         if not self.training:
             self.im_feat_list = [self.im_feat_list[-1]]
-
-
+        
     def query(self, points, calibs, transforms=None, labels=None, update_pred=True, update_phi=True):
         '''
         given 3d points, we obtain 2d projection of these given the camera matrices.
@@ -133,19 +163,6 @@ class HGPIFuNet(BasePIFuNet):
         if labels is not None:
             self.labels = in_bb * labels
 
-        #     for i in range(xyz.size(0)):
-        #         p = xyz[i].detach().cpu().numpy().T
-        #         v = labels[i].detach().cpu().numpy().T
-
-        #         cin = np.ones_like(p[v[:,0] > 0.5])
-        #         cin[:,1:] = 0.0
-        #         save_points_color('%04d_in.obj' % i, p[v[:,0] > 0.5], cin)
-        #         cin = np.ones_like(p[v[:,0] <= 0.5])
-        #         cin[:,:2] = 0.0
-        #         save_points_color('%04d_out.obj' % i, p[v[:,0] <= 0.5], cin)
-
-        # exit()
-
         sp_feat = self.spatial_enc(xyz, calibs=calibs)
 
         intermediate_preds_list = []
@@ -155,9 +172,6 @@ class HGPIFuNet(BasePIFuNet):
 
             if self.opt.sp_enc_type == 'vol' and self.opt.sp_no_pifu:
                 point_local_feat = sp_feat
-            # elif self.opt.imfeat_norm: # experimental
-            #     point_local_feat_list = [F.normalize(self.index(im_feat, xy),dim=1,eps=1e-8), sp_feat]            
-            #     point_local_feat = torch.cat(point_local_feat_list, 1)
             else:
                 point_local_feat_list = [self.index(im_feat, xy), sp_feat]       
                 point_local_feat = torch.cat(point_local_feat_list, 1)
@@ -274,7 +288,6 @@ class HGPIFuNet(BasePIFuNet):
 
         return nways
 
-
     def get_im_feat(self):
         '''
         return the image filter in the last stack
@@ -282,6 +295,7 @@ class HGPIFuNet(BasePIFuNet):
             [B, C, H, W]
         '''
         return self.im_feat_list[-1]
+
 
     def get_error(self, gamma):
         '''
