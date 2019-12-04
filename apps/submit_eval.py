@@ -13,7 +13,7 @@ executor.update_parameters(timeout_min=2*60, gpus_per_node=4, cpus_per_task=40, 
 
 resolution = '512'
 
-file_size = 1490 # set the total size of inputs
+file_size = 1490 # set the total size of inputs (if split_size is 1, you can ignore)
 split_size = 1 # set how many jobs you want to launch
 interval = file_size // split_size
 
