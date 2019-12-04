@@ -1,452 +1,125 @@
 import submitit
 from .train import trainerWrapper
-from .test import evalWrapper
+from .train_wnml import trainerWrapper as trainerWrapperNML
+from .train_mr import trainerWrapper as trainerWrapperMR
+
 from .recon import reconWrapper
 
-<<<<<<< HEAD
-base_cmd =['--dataroot','./../../data/hf_human_full','--dataset', 'renderppl',
-            '--num_iter', '300000', 
-            '--random_flip', '--random_scale', '--random_trans',
-            '--schedule', '200000', '250000', '--sampling_otf',
-            '--sampling_mode', 'uniform_sigma_aneal', '--linear_anneal_sigma', 
-            '--norm', 'group', '--vol_norm', 'group', '--lambda_nml', '0.0',
-            '--num_sample_inout', '6000', '--num_threads', '40', '--vol_ch', '32']
 
-executor = submitit.AutoExecutor(folder="cluster_log")  # submission interface (logs are dumped in the folder)
-executor.update_parameters(timeout_min=72*60, gpus_per_node=4, cpus_per_task=40, partition="uninterrupted", name='wildPIFu')  # timeout in min
-# executor.update_parameters(timeout_min=1*60, gpus_per_node=1, cpus_per_task=10, partition="dev", name='wildPIFu')  # timeout in min
-=======
-base_cmd =['--dataroot','./../../data/hf_human_big','--dataset', 'renderppl',
+base_cmd =['--dataroot','./../../data/pifu_data', '--dataset', 'renderppl',
             '--random_flip', '--random_scale', '--random_trans', '--random_rotate', '--random_bg',
-            '--linear_anneal_sigma', 
-            '--norm', 'group', '--vol_norm', 'group',
-            '--num_threads', '40', '--vol_ch_in', '32']
+            '--linear_anneal_sigma', '--norm', 'group', '--num_threads', '40', '--crop_type', 'fullbody',
+            '--z_size', '200.0', '--occ_loss_type', 'bce', '--mask_ratio', '0.2']
 
 executor = submitit.AutoExecutor(folder="cluster_log")  # submission interface (logs are dumped in the folder)
-executor.update_parameters(timeout_min=72*60, gpus_per_node=4, cpus_per_task=40, partition="priority", name='wildPIFu', comment='cvpr deadline')  # timeout in min
-# executor.update_parameters(timeout_min=2*60, gpus_per_node=1, cpus_per_task=10, partition="uninterrupted", name='wildPIFu')  # timeout in min
->>>>>>> upperbody
+executor.update_parameters(timeout_min=72*60, gpus_per_node=4, cpus_per_task=40, partition="dev", name='wildPIFu', comment='cvpr deadline')  # timeout in min
 
+###############################################################################################
+##                   Lower PIFu
+###############################################################################################
 
-# cmd = base_cmd + ['--name','cluster_upper_1010_bce_longarm_mask_imnorm_g0.65', '--sampling_mode', 'uniform_sigma_arm_mask_aneal', '--batch_size', '8', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '20.0', '--sigma_min', '2.0', '--z_size', '400.0', '--occ_loss_type', 'bce', '--occ_gamma', '0.65', '--imfeat_norm']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
+# plain
+cmd = base_cmd + ['--name', 'lower_pifu', '--sigma_max', '5.0', '--sigma_min', '5.0', '--sigma_surface', '10.0',\
+                '--batch_size', '8', '--num_stack', '4', '--hg_depth', '2', '--mlp_norm', 'none',\
+                '--sampling_otf', '--sampling_parts', '--num_sample_surface', '6000', '--num_sample_inout', '2000', \
+                '--uniform_ratio', '0.2', '--num_iter', '400000', '--schedule', '300000', '350000', '--learning_rate', '1e-3', '--resolution', '256']
 
-# cmd = base_cmd + ['--name','cluster_upper_1010_bce_longarm_face_mask_imnorm_g0.65', '--sampling_mode', 'uniform_sigma_arm_mask_face_aneal', '--batch_size', '8', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '20.0', '--sigma_min', '2.0', '--z_size', '400.0', '--occ_loss_type', 'bce', '--occ_gamma', '0.65', '--imfeat_norm']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
+# for local
+trainerWrapper(cmd)
 
-# cmd = base_cmd + ['--name','cluster_face_1020', '--crop_type', 'face', '--mask_ratio', '0.2', '--batch_size', '8', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '20.0', '--sigma_min', '2.0', '--z_size', '400.0', '--occ_loss_type', 'bce']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--name','cluster_upperbody_1020', '--crop_type', 'upperbody', '--mask_ratio', '0.2', '--batch_size', '8', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '20.0', '--sigma_min', '2.0', '--z_size', '400.0', '--occ_loss_type', 'bce']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--name','cluster_fullbody_1020', '--crop_type', 'fullbody', '--mask_ratio', '0.2', '--batch_size', '8', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '20.0', '--sigma_min', '2.0', '--z_size', '400.0', '--occ_loss_type', 'bce']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--resolution', '256', '--name','test', '--crop_type', 'face', '--freq_mesh', '100', '--freq_save_ply', '100', '--mask_ratio', '0.1', '--batch_size', '8', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '20.0', '--sigma_min', '2.0', '--z_size', '200.0', '--occ_loss_type', 'bce']
-# trainerWrapper(cmd)
-
-# cmd = base_cmd + ['--name','cluster_face_1020_fixed', '--crop_type', 'face', '--mask_ratio', '0.2', '--batch_size', '8', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '20.0', '--sigma_min', '2.0', '--z_size', '200.0', '--occ_loss_type', 'bce']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--name','cluster_upperbody_1020_fixed', '--crop_type', 'upperbody', '--mask_ratio', '0.2', '--batch_size', '8', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '20.0', '--sigma_min', '2.0', '--z_size', '200.0', '--occ_loss_type', 'bce']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--name','cluster_fullbody_1020_fixed', '--crop_type', 'fullbody', '--mask_ratio', '0.2', '--batch_size', '8', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '20.0', '--sigma_min', '2.0', '--z_size', '200.0', '--occ_loss_type', 'bce']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--name','test', '--crop_type', 'upperbody', '--resolution', '128', '--freq_mesh', '200', '--mask_ratio', '0.2', '--batch_size', '8', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '20.0', '--sigma_min', '2.0', '--z_size', '200.0', '--occ_loss_type', 'bce', '--mlp_norm', 'none']
-# trainerWrapper(cmd)
-
-# cmd = base_cmd + ['--batch_size', '8', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '20.0', '--sigma_min', '2.0', '--z_size', '200.0', '--occ_loss_type', 'bce', '--mask_ratio', '0.2', '--mlp_norm', 'batch']
-
-# cmd = cmd + ['--name','cluster_face_1021_batch', '--crop_type', 'face']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = cmd + ['--name','cluster_upperbody_1021_batch', '--crop_type', 'upperbody']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = cmd + ['--name','cluster_fullbody_1021_batch', '--crop_type', 'fullbody']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--batch_size', '8', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2', '--z_size', '200.0', '--occ_loss_type', 'bce', '--mask_ratio', '0.2', '--mlp_norm', 'none']
-
-# cmd = cmd + ['--name', 'cluster_face_1021_nonorm', '--crop_type', 'face', '--sigma_max', '5.0', '--sigma_min', '0.5', '--load_netG_checkpoint_path', './checkpoints/cluster_face_1021_nonorm_img.hg.group.4.2.256_wbg1_s2.20_train_latest']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = cmd + ['--name', 'cluster_upperbody_1021_nonorm', '--crop_type', 'upperbody', '--sigma_max', '10.0', '--sigma_min', '1.0', '--load_netG_checkpoint_path', './checkpoints/cluster_upperbody_1021_nonorm_img.hg.group.4.2.256_wbg1_s2.20_train_latest']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# # cmd = cmd + ['--name', 'cluster_fullbody_1021_nonorm', '--crop_type', 'fullbody', '--sigma_max', '20.0', '--sigma_min', '2.0', ]
-# # job = executor.submit(trainerWrapper, cmd)  
-# # print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--batch_size', '8', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2',\
-#                 '--z_size', '200.0', '--occ_loss_type', 'bce', '--mask_ratio', '0.2', '--mlp_norm', 'none',\
-#                 '--sampling_otf', '--num_sample_surface', '4000', '--num_sample_inout', '6000', \
-#                 '--num_iter', '100000', '--schedule', '60000', '--learning_rate', '1e-4', '--finetune']
-
-# # cmd = cmd + ['--name', 'test', '--crop_type', 'face', '--sigma_max', '5.0', '--sigma_min', '5.0', '--sigma_surface', '2.0', '--load_netG_checkpoint_path', './checkpoints/cluster_face_1021_nonorm_img.hg.group.4.2.256_wbg1_s2.20_train_latest']
-# # trainerWrapper(cmd)  
-
-# cmd = cmd + ['--name', 'cluster_face_1022_nonorm_wsurface', '--crop_type', 'face', '--sigma_max', '5.0', '--sigma_min', '5.0', '--sigma_surface', '2.0', '--load_netG_checkpoint_path', './checkpoints/cluster_face_1021_nonorm_img.hg.group.4.2.256_wbg1_s2.20_train_latest']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-<<<<<<< HEAD
-# cmd = base_cmd + ['--name','cluster_wpitch_cmp', '--batch_size', '8', '--sp_enc_type', 'vol_enc', '--num_stack', '4', '--hg_depth', '2',\
-#      '--sigma_max', '5.0', '--sigma_min', '5.0', '--mlp_dim', '1024', '512', '256', '128', '10', '--use_compose', '--lambda_cmp_l1', '0']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--name','cluster_wpitch_cmp', '--batch_size', '8', '--sp_enc_type', 'vol_enc', '--num_stack', '4', '--hg_depth', '2',\
-#      '--sigma_max', '5.0', '--sigma_min', '5.0', '--mlp_dim', '1024', '512', '256', '128', '10', '--random_bg',\
-#      '--use_compose', '--lambda_cmp_l1', '0']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-
-# cmd = base_cmd + ['--name','cluster_wpitch_batch', '--batch_size', '8', '--sp_enc_type', 'vol_enc', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '5.0', '--sigma_min', '5.0', '--vol_ch', '1']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--name','cluster_wpitch_simple_c', '--batch_size', '8', '--sp_enc_type', 'vol_enc', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '5.0', '--sigma_min', '5.0', '--vol_net', 'simple_c']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--name','cluster_wpitch_simple_1', '--batch_size', '8', '--sp_enc_type', 'vol_enc', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '5.0', '--sigma_min', '5.0', '--vol_net', 'simple_1']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--name', 'cluster_wpitch_hg3d', '--batch_size', '8', '--sp_enc_type', 'vol_enc', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '5.0', '--sigma_min', '5.0', '--vol_net', 'hg', '--random_bg', '--continue_train']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-cmd = base_cmd + ['--name','cluster_wpitch_long', '--batch_size', '8', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '5.0', '--sigma_min', '5.0', '--num_sample_normal', '3000', '--random_bg', '--continue_train']
+# for server
 job = executor.submit(trainerWrapper, cmd)  
 print(job.job_id)  # ID of your job
 
-# cmd = base_cmd + ['--name','cluster_wpitch_long', '--batch_size', '8', '--sp_enc_type', 'vol_enc', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '5.0', '--sigma_min', '5.0', '--num_sample_normal', '3000', '--random_bg']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
 
-# cmd = base_cmd + ['--name','cluster_wpitch_long_even', '--batch_size', '8', '--sp_enc_type', 'vol_enc', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '5.0', '--sigma_min', '5.0', '--num_sample_normal', '3000', '--random_bg']
-# trainerWrapper(cmd)
+# ###############################################################################################
+# ##                   Lower PIFu With Normal Conditioning
+# ###############################################################################################
 
-## eval
-
-# cmd = base_cmd + ['--name', 'cluster', '--batch_size', '8', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '5.0', '--sigma_min', '5.0', '--no_numel_eval']
-# job = executor.submit(evalWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--name','cluster', '--batch_size', '8', '--sp_enc_type', 'vol_enc', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '5.0', '--sigma_min', '5.0', '--no_numel_eval']
-# job = executor.submit(evalWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--name','cluster_wpitch', '--batch_size', '8', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '5.0', '--sigma_min', '5.0', '--no_numel_eval']
-# job = executor.submit(evalWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--name','cluster_wpitch', '--batch_size', '8', '--sp_enc_type', 'vol_enc', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '5.0', '--sigma_min', '5.0', '--no_numel_eval']
-# job = executor.submit(evalWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--name','cluster_wpitch_no_pifu', '--batch_size', '8', '--sp_enc_type', 'vol_enc', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '5.0', '--sigma_min', '5.0', '--sp_no_pifu', '--no_numel_eval']
-# job = executor.submit(evalWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--name','cluster_no_pifu', '--batch_size', '8', '--sp_enc_type', 'vol_enc', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '5.0', '--sigma_min', '5.0', '--sp_no_pifu', '--no_numel_eval']
-# job = executor.submit(evalWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--name','cluster_wpitch', '--batch_size', '8', '--sp_enc_type', 'vol_enc', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '10.0', '--sigma_min', '2.0', '--random_bg', '--no_numel_eval']
-# job = executor.submit(evalWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--name','cluster_wpitch', '--batch_size', '8', '--sp_enc_type', 'vol_enc', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '5.0', '--sigma_min', '5.0', '--random_bg', '--no_numel_eval']
-# job = executor.submit(reconWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--name','cluster_wpitch', '--batch_size', '8', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '10.0', '--sigma_min', '2.0', '--no_numel_eval']
-# job = executor.submit(evalWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--name','cluster_wpitch', '--batch_size', '8', '--sp_enc_type', 'vol_enc', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '10.0', '--sigma_min', '2.0', '--no_numel_eval']
-# job = executor.submit(evalWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--name','cluster_cmp', '--batch_size', '8', '--sp_enc_type', 'vol_enc', '--num_stack', '4', '--hg_depth', '2',\
-#      '--sigma_max', '5.0', '--sigma_min', '5.0', '--mlp_dim', '1024', '512', '256', '128', '10', '--use_compose', '--lambda_cmp_l1', '1e-3', '--no_numel_eval']
-# job = executor.submit(evalWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--name','cluster_wpitch_batch', '--batch_size', '8', '--sp_enc_type', 'vol_enc', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '5.0', '--sigma_min', '5.0', '--vol_ch', '1', '--no_numel_eval']
-# job = executor.submit(evalWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--name','cluster_wpitch_simple_c', '--batch_size', '8', '--sp_enc_type', 'vol_enc', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '5.0', '--sigma_min', '5.0', '--vol_net', 'simple_c', '--no_numel_eval']
-# job = executor.submit(evalWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--name','cluster_wpitch_simple_1', '--batch_size', '8', '--sp_enc_type', 'vol_enc', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '5.0', '--sigma_min', '5.0', '--vol_net', 'simple_1', '--no_numel_eval']
-# job = executor.submit(evalWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--name','cluster', '--batch_size', '8', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '5.0', '--sigma_min', '5.0', '--random_bg']
-# job = executor.submit(reconWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-=======
-# cmd = cmd + ['--name', 'cluster_upperbody_1022_nonorm_wsurface', '--crop_type', 'upperbody', '--sigma_max', '8.0', '--sigma_min', '8.0', '--sigma_surface', '3.0', '--load_netG_checkpoint_path', './checkpoints/cluster_upperbody_1021_nonorm_img.hg.group.4.2.256_wbg1_s2.20_train_latest']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = cmd + ['--name', 'cluster_fullbody_1022_nonorm_wsurface', '--crop_type', 'fullbody', '--sigma_max', '10.0', '--sigma_min', '10.0', '--sigma_surface', '3.0', '--load_netG_checkpoint_path', './checkpoints/cluster_fullbody_1021_nonorm_img.hg.group.4.2.256_wbg1_s2.20_train_latest']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# for nml in [1.0, 1e-1, 1e-2, 1e-3]:
-#     cmd = base_cmd + ['--batch_size', '8', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2',\
-#                     '--z_size', '200.0', '--occ_loss_type', 'bce', '--mask_ratio', '0.2', '--mlp_norm', 'none',\
-#                     '--num_sample_normal', '4000', '--num_sample_inout', '6000', \
-#                     '--num_iter', '100000', '--schedule', '60000', '--learning_rate', '1e-4', '--finetune', '--nml_loss_type', 'l1']
-
-#     cmd += ['--lambda_nml', '%f' % nml] 
-
-#     cmd = cmd + ['--name', 'cluster_face_1023_nonorm_l1_wnormal%e' % nml, '--crop_type', 'face', '--sigma_max', '3.0', '--sigma_min', '3.0', '--load_netG_checkpoint_path', './checkpoints/cluster_face_1021_nonorm_img.hg.group.4.2.256_wbg1_s2.20_train_latest']
-#     job = executor.submit(trainerWrapper, cmd)  
-#     print(job.job_id)  # ID of your job
-
-#     cmd = cmd + ['--name', 'cluster_upperbody_1023_nonorm_l1_wnormal%e' % nml, '--crop_type', 'upperbody', '--sigma_max', '3.0', '--sigma_min', '3.0', '--load_netG_checkpoint_path', './checkpoints/cluster_upperbody_1021_nonorm_img.hg.group.4.2.256_wbg1_s2.20_train_latest']
-#     job = executor.submit(trainerWrapper, cmd)  
-#     print(job.job_id)  # ID of your job
-
-#     cmd = cmd + ['--name', 'cluster_fullbody_1023_nonorm_l1_wnormal%e' % nml, '--crop_type', 'fullbody', '--sigma_max', '5.0', '--sigma_min', '5.0', '--load_netG_checkpoint_path', './checkpoints/cluster_fullbody_1021_nonorm_img.hg.group.4.2.256_wbg1_s2.20_train_latest']
-#     job = executor.submit(trainerWrapper, cmd)  
-#     print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--batch_size', '8', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2',\
-#                 '--z_size', '200.0', '--occ_loss_type', 'bce', '--mask_ratio', '0.2', '--mlp_norm', 'none',\
-#                 '--num_sample_normal', '4000', '--num_sample_inout', '6000', \
-#                 '--num_iter', '100000', '--schedule', '60000', '--learning_rate', '1e-4', '--finetune', '--nml_loss_type', 'l1']
-
-# cmd += ['--lambda_nml', '1e0'] 
-
-# cmd = cmd + ['--name', 'test', '--crop_type', 'face', '--sigma_max', '3.0', '--sigma_min', '3.0', '--load_netG_checkpoint_path', './checkpoints/cluster_face_1021_nonorm_img.hg.group.4.2.256_wbg1_s2.20_train_latest']
-# trainerWrapper(cmd)
-
-# for opt in ['0.2', '0.4', '0.6']:
-#     cmd = base_cmd + ['--batch_size', '8', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2',\
-#                     '--z_size', '200.0', '--occ_loss_type', 'bce', '--mask_ratio', '0.2', '--mlp_norm', 'none',\
-#                     '--sampling_otf', '--num_sample_inout', '8000', \
-#                     '--num_iter', '200000', '--schedule', '100000', '150000', '--learning_rate', '1e-3', '--finetune']
-#     cmd += ['--uniform_ratio', opt]
-    # cmd = cmd + ['--name', 'test', '--crop_type', 'face', '--sigma_max', '5.0', '--sigma_min', '5.0', '--sigma_surface', '2.0', '--load_netG_checkpoint_path', './checkpoints/cluster_face_1021_nonorm_img.hg.group.4.2.256_wbg1_s2.20_train_latest']
-    # trainerWrapper(cmd)  
-
-    # cmd = cmd + ['--name', 'test', '--crop_type', 'face', '--nml_loss_type', 'mse', '--lambda_nml', '0.1', '--num_sample_normal', '4000', '--sigma_max', '2.0', '--sigma_min', '2.0', '--load_netG_checkpoint_path', './checkpoints/cluster_face_1021_nonorm_img.hg.group.4.2.256_wbg1_s2.20_train_latest']
-    # trainerWrapper(cmd)
-    # job = executor.submit(trainerWrapper, cmd)  
-    # print(job.job_id)  # ID of your job
-
-    # cmd = cmd + ['--name', 'cluster_face_1023_nonorm_long_wsurface_u%s' % opt, '--crop_type', 'face', '--sigma_max', '2.0', '--sigma_min', '2.0', '--load_netG_checkpoint_path', './checkpoints/cluster_face_1021_nonorm_img.hg.group.4.2.256_wbg1_s2.20_train_latest']
-    # job = executor.submit(trainerWrapper, cmd)  
-    # print(job.job_id)  # ID of your job
-
-    # cmd = cmd + ['--name', 'cluster_upperbody_1023_nonorm_long_wsurface_u%s' % opt, '--crop_type', 'upperbody', '--sigma_max', '3.0', '--sigma_min', '3.0', '--load_netG_checkpoint_path', './checkpoints/cluster_upperbody_1021_nonorm_img.hg.group.4.2.256_wbg1_s2.20_train_latest']
-    # job = executor.submit(trainerWrapper, cmd)  
-    # print(job.job_id)  # ID of your job
-
-    # cmd = cmd + ['--name', 'cluster_fullbody_1023_nonorm_long_wsurface_u%s' % opt, '--crop_type', 'fullbody', '--sigma_max', '5.0', '--sigma_min', '5.0', '--load_netG_checkpoint_path', './checkpoints/cluster_fullbody_1021_nonorm_img.hg.group.4.2.256_wbg1_s2.20_train_latest']
-    # job = executor.submit(trainerWrapper, cmd)  
-    # print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--batch_size', '8', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2',\
-#                 '--z_size', '200.0', '--occ_loss_type', 'mse', '--mask_ratio', '0.2', '--mlp_norm', 'none',\
-#                 '--sampling_otf', '--sampling_parts', '--num_sample_surface', '4000', '--num_sample_inout', '4000', \
-#                 '--num_iter', '500000', '--schedule', '300000', '400000', '--learning_rate', '1e-3', '--resolution', '256']
-
-# cmd = cmd + ['--name', 'test', '--dataroot','./../../data/hf_human_upper', '--crop_type', 'face', '--sigma_max', '5.0', '--sigma_min', '2.0', '--sigma_surface', '2.0']
-# trainerWrapper(cmd)  
-
-# cmd = cmd + ['--name', 'cluster_face_1023_longlong_nonorm_wsurface_mse', '--dataroot','./../../data/hf_human_upper', '--crop_type', 'face', '--sigma_max', '5.0', '--sigma_min', '2.0', '--sigma_surface', '2.0']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = cmd + ['--name', 'cluster_upperbody_1023_longlong_nonorm_wsurface_mse', '--dataroot','./../../data/hf_human_upper', '--crop_type', 'upperbody', '--sigma_max', '10.0', '--sigma_min', '3.0', '--sigma_surface', '3.0']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = cmd + ['--name', 'cluster_fullbody_1023_longlong_nonorm_wsurface_mse', '--dataroot','./../../data/hf_human_big', '--crop_type', 'fullbody', '--sigma_max', '20.0', '--sigma_min', '3.0', '--sigma_surface', '3.0']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-
-# cmd = base_cmd + ['--batch_size', '8', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2',\
-#                 '--z_size', '200.0', '--occ_loss_type', 'bce', '--mask_ratio', '0.2', '--mlp_norm', 'none',\
+# # separate version
+# cmd = base_cmd + ['--name', 'lower_pifu_wnml_separate', \
+#                 '--batch_size', '4', '--num_stack', '4', '--hg_depth', '2', '--sigma_surface', '10.0',\
+#                 '--mlp_norm', 'none', '--sigma_max', '5.0', '--sigma_min', '5.0',\
 #                 '--sampling_otf', '--sampling_parts', '--num_sample_surface', '6000', '--num_sample_inout', '2000', \
-#                 '--uniform_ratio', '0.2', '--num_iter', '400000', '--schedule', '300000', '350000', '--learning_rate', '1e-3', '--resolution', '256']
+#                 '--uniform_ratio', '0.2', '--num_iter', '400000', '--schedule', '300000', '350000', '--learning_rate', '1e-3', '--resolution', '256',\
+#                 '--use_back_normal', '--load_netB_checkpoint_path', '/private/home/shunsukesaito/dev/pix2pixHD/checkpoints/f2b512_crop_r2n/latest_net_G.pth',\
+#                 '--use_front_normal', '--load_netF_checkpoint_path', '/private/home/shunsukesaito/dev/pix2pixHD/checkpoints/f2f512_crop_r2n/latest_net_G.pth']
 
-# cmd = cmd + ['--name', 'test', '--dataroot','./../../data/hf_human_big', '--crop_type', 'fullbody', '--sigma_max', '20.0', '--sigma_min', '3.0', '--sigma_surface', '10.0']
-# trainerWrapper(cmd)  
+# job = executor.submit(trainerWrapperNML, cmd)  
+# print(job.job_id)  # ID of your job
 
-# cmd = cmd + ['--name', 'cluster_face_1024_facecenter', '--dataroot','./../../data/hf_human_face', '--crop_type', 'face', '--sigma_max', '5.0', '--sigma_min', '2.0', '--sigma_surface', '5.0']
+# # all in one version
+# cmd = base_cmd + ['--name', 'lower_pifu_wnml_allinone',\
+#                 '--batch_size', '2', '--num_stack', '4', '--hg_depth', '2', '--sigma_surface', '10.0',\
+#                 '--mlp_norm', 'none', '--sigma_max', '5.0', '--sigma_min', '5.0',\
+#                 '--sampling_otf', '--sampling_parts', '--num_sample_surface', '6000', '--num_sample_inout', '2000', \
+#                 '--uniform_ratio', '0.2', '--num_iter', '400000', '--schedule', '300000', '350000', '--learning_rate', '1e-3', '--resolution', '256',\
+#                 '--use_back_normal', '--load_netFB_checkpoint_path', '/private/home/shunsukesaito/dev/pix2pixHD/checkpoints/f2b512_crop_allinone/latest_net_G.pth',\
+#                 '--use_front_normal', '--use_aio_normal']
+
+# job = executor.submit(trainerWrapperNML, cmd)  
+# print(job.job_id)  # ID of your job
+
+# ###############################################################################################
+# ##                   Multi-Level PIFu
+# ###############################################################################################
+
+
+# # final model
+# cmd = base_cmd + ['--name', 'ours_wnml',
+#                 '--batch_size', '2', '--num_local', '2', '--num_stack', '1', '--hg_depth', '4',
+#                 '--mlp_norm', 'none', '--sigma_max', '3.0', '--sigma_min', '3.0', '--sampling_mode', 'sigma3_uniform',
+#                 '--sampling_otf', '--sampling_parts', '--num_sample_surface', '8000', '--num_sample_inout', '0', 
+#                 '--uniform_ratio', '0.2', '--num_iter', '200000', '--schedule', '100000', '150000', '--learning_rate', '1e-3', '--resolution', '512',
+#                 '--load_netG_checkpoint_path', '/private/home/shunsukesaito/CVPR2020/checkpoints/lower_pifu_wnml_train_latest',
+#                 '--loadSizeBig', '1024', '--loadSizeLocal', '512', '--hg_dim', '16', '--mlp_dim', '272', '512', '256', '128', '1', 
+#                 '--mlp_res_layers', '1', '2', '--merge_layer', '2']
+
+# job = executor.submit(trainerWrapperMR, cmd)  
+# print(job.job_id)  # ID of your job
+
+# ###############################################################################################
+# ##                   Ablation Study
+# ###############################################################################################
+
+# # for ablation study, trainining resnet 
+# cmd = base_cmd + ['--name', 'ablation_resnet', '--batch_size', '2', '--netG', 'resnet', '--num_stack', '4', '--hg_depth', '2',\
+#                 '--z_size', '200.0', '--mask_ratio', '0.2', '--mlp_norm', 'batch', '--sigma_max', '5.0', '--sigma_min', '5.0',\
+#                 '--sampling_parts', '--num_sample_surface', '8000', '--num_sample_inout', '0', '--occ_loss_type', 'bce',\
+#                 '--uniform_ratio', '0.2', '--num_iter', '200000', '--schedule', '100000', '150000', '--learning_rate', '1e-3', '--resolution', '256',\
+#                 '--loadSize', '1024', '--sampling_mode', 'sigma3_uniform', '--mlp_dim', '1025', '1024', '512', '256', '128', '1']
+
 # job = executor.submit(trainerWrapper, cmd)  
 # print(job.job_id)  # ID of your job
 
-# cmd = cmd + ['--name', 'cluster_face_1024', '--dataroot','./../../data/hf_human_upper', '--crop_type', 'face', '--sigma_max', '5.0', '--sigma_min', '2.0', '--sigma_surface', '5.0']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = cmd + ['--name', 'cluster_upperbody_1024', '--dataroot','./../../data/hf_human_upper', '--crop_type', 'upperbody', '--sigma_max', '10.0', '--sigma_min', '3.0', '--sigma_surface', '8.0', '--continue_train']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = cmd + ['--name', 'cluster_fullbody_1024', '--dataroot','./../../data/hf_human_big', '--crop_type', 'fullbody', '--sigma_max', '20.0', '--sigma_min', '3.0', '--sigma_surface', '10.0']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = cmd + ['--name', 'cluster_face_1024_facecenter_fixgamma', '--dataroot','./../../data/hf_human_face', '--crop_type', 'face', '--sigma_max', '5.0', '--sigma_min', '2.0', '--sigma_surface', '5.0', '--occ_gamma', '0.5']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = cmd + ['--name', 'cluster_face_1024_fixgamma', '--dataroot','./../../data/hf_human_upper', '--crop_type', 'face', '--sigma_max', '5.0', '--sigma_min', '2.0', '--sigma_surface', '5.0', '--occ_gamma', '0.5']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = cmd + ['--name', 'cluster_upperbody_1024_fixgamma', '--dataroot','./../../data/hf_human_upper', '--crop_type', 'upperbody', '--sigma_max', '10.0', '--sigma_min', '3.0', '--sigma_surface', '8.0', '--occ_gamma', '0.6', '--continue_train']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = cmd + ['--name', 'cluster_fullbody_1024_fixgamma', '--dataroot','./../../data/hf_human_big', '--crop_type', 'fullbody', '--sigma_max', '20.0', '--sigma_min', '3.0', '--sigma_surface', '10.0', '--occ_gamma', '0.7']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = cmd + ['--name', 'cluster_fullbody_1024_hpifu_poc', '--dataroot','./../../data/hf_human_big', '--crop_type', 'fullbody', '--sigma_max', '20.0', '--sigma_min', '3.0', '--sigma_surface', '10.0', '--netG', 'hghpifu', '--merge_layer', '2']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = cmd + ['--name', 'cluster_upperbody_center_1024', '--dataroot','./../../data/hf_human_upperbody', '--crop_type', 'upperbody', '--sigma_max', '10.0', '--sigma_min', '3.0', '--sigma_surface', '8.0']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = cmd + ['--name', 'test', '--dataroot','./../../data/hf_human_upperbody', '--crop_type', 'upperbody', '--sigma_max', '10.0', '--sigma_min', '3.0', '--sigma_surface', '8.0']
-# cmd = cmd + ['--name', 'cluster_fullbody_center_1025_hpifu_poc', '--dataroot','./../../data/hf_human_fullbody', '--crop_type', 'fullbody', '--sigma_max', '20.0', '--sigma_min', '3.0', '--sigma_surface', '10.0', '--netG', 'hghpifu', '--merge_layer', '2']
-# trainerWrapper(cmd)
-
-# cmd = cmd + ['--name', 'cluster_fullbody_center_1025_hpifu_poc', '--dataroot','./../../data/hf_human_fullbody', '--crop_type', 'fullbody', '--sigma_max', '20.0', '--sigma_min', '3.0', '--sigma_surface', '10.0', '--netG', 'hghpifu', '--merge_layer', '2']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = cmd + ['--name', 'cluster_fullbody_center_1025', '--dataroot','./../../data/hf_human_fullbody', '--crop_type', 'fullbody', '--sigma_max', '20.0', '--sigma_min', '3.0', '--sigma_surface', '10.0']
-# job = executor.submit(trainerWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--batch_size', '8', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2',\
-#                 '--z_size', '200.0', '--mask_ratio', '0.2', '--mlp_norm', 'none', '--sigma_max', '5.0', '--sigma_min', '5.0',\
+# # for ablation study, training upper layer only
+# cmd = base_cmd + ['--batch_size', '4', '--num_stack', '1', '--hg_depth', '4',\
+#                 '--mlp_norm', 'none', '--sigma_max', '3.0', '--sigma_min', '3.0', '--sampling_mode', 'sigma3_uniform',\
 #                 '--sampling_otf', '--sampling_parts', '--num_sample_surface', '8000', '--num_sample_inout', '0', \
-#                 '--uniform_ratio', '0.2', '--num_iter', '400000', '--schedule', '300000', '350000', '--learning_rate', '1e-3', '--resolution', '256']
+#                 '--uniform_ratio', '0.2', '--num_iter', '300000', '--schedule', '200000', '250000', '--learning_rate', '1e-3', '--resolution', '256',
+#                 '--loadSizeBig', '1024', '--loadSizeLocal', '1024', '--hg_dim', '16',
+#                 '--mlp_res_layers', '1', '2', '--merge_layer', '2']
 
-# cmd1 = cmd + ['--name', 'cluster_upperbody_bce_1104', '--dataroot', './../../data/hf_human_upper', '--crop_type', 'upperbody', '--occ_loss_type', 'bce']
-# job = executor.submit(trainerWrapper, cmd1)  
+# for with_resnet in [1, 0]:
+#     cmd1 = cmd + ['--name', 'fullres_ablation_resnet%d' % (with_resnet), \
+#         '--num_local', '1', '--netG', 'hg_ablation_resnet' if with_resnet else 'hg_ablation']
+    
+#     if with_resnet:
+#         cmd1 += ['--mlp_dim', '529', '512', '256', '128', '1']
+#     else:
+#         cmd1 += ['--mlp_dim', '17', '512', '256', '128', '1']
+
+#     job = executor.submit(trainerWrapperMR, cmd1)  
+#     print(job.job_id)  # ID of your job
+
+# cmd = base_cmd + ['--name', 'ours_nonml', '--num_local', '1',
+#                 '--batch_size', '2', '--num_stack', '1', '--hg_depth', '2',
+#                 '--mlp_norm', 'none', '--sigma_max', '3.0', '--sigma_min', '3.0', '--sampling_mode', 'sigma3_uniform',
+#                 '--sampling_otf', '--sampling_parts', '--num_sample_surface', '8000', '--num_sample_inout', '0', 
+#                 '--uniform_ratio', '0.2', '--num_iter', '200000', '--schedule', '100000', '150000', '--learning_rate', '1e-3', '--resolution', '256',
+#                 '--load_netG_checkpoint_path', '/private/home/shunsukesaito/CVPR2020/checkpoints/lower_pifu_train_latest',
+#                 '--loadSizeBig', '1024', '--loadSizeLocal', '512', '--hg_dim', '16', '--mlp_dim', '272', '512', '256', '128', '1', 
+#                 '--mlp_res_layers', '1', '2', '--merge_layer', '2']
+
+# job = executor.submit(trainerWrapperMR, cmd)  
 # print(job.job_id)  # ID of your job
-
-# cmd1 = cmd + ['--name', 'cluster_upperbody_mse_1104', '--dataroot', './../../data/hf_human_upperbody', '--crop_type', 'upperbody', '--occ_loss_type', 'mse']
-# job = executor.submit(trainerWrapper, cmd1)  
-# print(job.job_id)  # ID of your job
-
-# cmd1 = cmd + ['--name', 'cluster_face_bce_1105', '--dataroot', './../../data/hf_human_face', '--crop_type', 'face', '--occ_loss_type', 'bce']
-# job = executor.submit(trainerWrapper, cmd1)  
-# print(job.job_id)  # ID of your job
-
-# cmd1 = cmd + ['--name', 'cluster_face_mse_1105', '--dataroot', './../../data/hf_human_face', '--crop_type', 'face', '--occ_loss_type', 'mse']
-# job = executor.submit(trainerWrapper, cmd1)  
-# print(job.job_id)  # ID of your job
-
-# cmd1 = cmd + ['--name', 'cluster_upperbody_mse_1105', '--dataroot', './../../data/hf_human_upperbody', '--crop_type', 'upperbody', '--occ_loss_type', 'mse', '--random_body_chop']
-# job = executor.submit(trainerWrapper, cmd1)  
-# print(job.job_id)  # ID of your job
-
-# cmd1 = cmd + ['--name', 'cluster_face_mse_1105', '--dataroot', './../../data/hf_human_face', '--crop_type', 'face', '--occ_loss_type', 'mse']
-# job = executor.submit(trainerWrapper, cmd1)  
-# print(job.job_id)  # ID of your job
-
-# cmd1 = cmd + ['--name', 'cluster_fullbody_mse_1106', '--dataroot', './../../data/hf_human_fullbody', '--crop_type', 'fullbody', '--occ_loss_type', 'mse']
-# # trainerWrapper(cmd1)
-# job = executor.submit(trainerWrapper, cmd1)  
-# print(job.job_id)  # ID of your job
-
-# cmd1 = cmd + ['--name', 'cluster_upperbody_mse_1106', '--dataroot', './../../data/hf_human_upperbody', '--crop_type', 'upperbody', '--occ_loss_type', 'mse', '--random_body_chop']
-# job = executor.submit(trainerWrapper, cmd1)  
-# print(job.job_id)  # ID of your job
-
-# cmd1 = cmd + ['--name', 'cluster_upperbody_mse_v2_1106', '--dataroot', './../../data/hf_human_upperbody', '--crop_type', 'upperbody', '--occ_loss_type', 'mse', '--random_body_chop']
-# job = executor.submit(trainerWrapper, cmd1)  
-# print(job.job_id)  # ID of your job
-
-# cmd = base_cmd + ['--batch_size', '8', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2',\
-#                 '--z_size', '200.0', '--mask_ratio', '0.2', '--mlp_norm', 'none', '--sigma_max', '5.0', '--sigma_min', '5.0',\
-#                 '--sampling_otf', '--sampling_parts', '--num_sample_surface', '8000', '--occ_loss_type', 'mse', '--loadSize', '256',\
-#                 '--uniform_ratio', '0.2', '--num_iter', '400000', '--schedule', '300000', '350000', '--learning_rate', '1e-3', '--resolution', '256', '--continue_train']
-
-# cmd1 = cmd + ['--name', 'cluster_fullbody256_mse_1106', '--dataroot', './../../data/hf_human_fullbody', '--crop_type', 'fullbody', '--sigma_surface', '10.0', '--num_sample_inout', '2000']
-# job = executor.submit(trainerWrapper, cmd1)  
-# print(job.job_id)  # ID of your job
-
-# cmd1 = cmd + ['--name', 'cluster_upperbody256_mse_1106', '--dataroot', './../../data/hf_human_upperbody', '--crop_type', 'upperbody', '--random_body_chop', '--num_sample_inout', '0']
-# job = executor.submit(trainerWrapper, cmd1)  
-# print(job.job_id)  # ID of your job
-
-
-# cmd = base_cmd + ['--batch_size', '8', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2',\
-#                 '--z_size', '200.0', '--mask_ratio', '0.2', '--mlp_norm', 'none', '--sigma_max', '5.0', '--sigma_min', '5.0',\
-#                 '--sampling_otf', '--sampling_parts', '--num_sample_surface', '8000', '--occ_loss_type', 'mse',\
-#                 '--uniform_ratio', '0.2', '--num_iter', '400000', '--schedule', '300000', '350000', '--learning_rate', '1e-3', '--resolution', '256']
-
-# cmd1 = cmd + ['--name', 'cluster_upperbody256_mse_crop12_1107', '--dataroot', './../../data/hf_human_upperbody', '--crop_type', 'upperbody', '--random_body_chop', '--loadSize', '256','--num_sample_inout', '2000']
-# job = executor.submit(trainerWrapper, cmd1)  
-# print(job.job_id)  # ID of your job
-
-# cmd1 = cmd + ['--name', 'cluster_upperbody512_mse_crop12_1107', '--dataroot', './../../data/hf_human_upperbody', '--crop_type', 'upperbody', '--random_body_chop', '--loadSize', '512','--num_sample_inout', '2000']
-# job = executor.submit(trainerWrapper, cmd1)  
-# print(job.job_id)  # ID of your job
-
-# cmd1 = cmd + ['--name', 'cluster_upperbody256_v2_mse_crop12_1107', '--dataroot', './../../data/hf_human_upperbody', '--crop_type', 'upperbody', '--random_body_chop', '--loadSize', '256','--num_sample_inout', '0']
-# job = executor.submit(trainerWrapper, cmd1)  
-# print(job.job_id)  # ID of your job
-
-# cmd1 = cmd + ['--name', 'cluster_upperbody512_v2_mse_crop12_1107', '--dataroot', './../../data/hf_human_upperbody', '--crop_type', 'upperbody', '--random_body_chop', '--loadSize', '512','--num_sample_inout', '0']
-# job = executor.submit(trainerWrapper, cmd1)  
-# print(job.job_id)  # ID of your job
-
-cmd = base_cmd + ['--name', 'ablation_resnet_1115', '--batch_size', '16', '--netG', 'resnet', '--sp_enc_type', 'z', '--num_stack', '4', '--hg_depth', '2',\
-                '--z_size', '200.0', '--mask_ratio', '0.2', '--mlp_norm', 'batch', '--sigma_max', '5.0', '--sigma_min', '5.0',\
-                '--sampling_parts', '--num_sample_surface', '8000', '--num_sample_inout', '0', '--occ_loss_type', 'bce',\
-                '--uniform_ratio', '0.2', '--num_iter', '200000', '--schedule', '100000', '150000', '--learning_rate', '1e-3', '--resolution', '256',\
-                '--loadSize', '1024', '--sampling_mode', 'sigma3_uniform', '--mlp_dim', '1025', '1024', '512', '256', '128', '1']
-
-job = executor.submit(trainerWrapper, cmd)  
-print(job.job_id)  # ID of your job
-
-# job = executor.submit(evalWrapper, cmd)  
-# print(job.job_id)  # ID of your job
-# trainerWrapper(cmd)
-# eval
-
-# cmd = base_cmd + ['--name','cluster_wpitch', '--batch_size', '8', '--sp_enc_type', 'vol_enc', '--num_stack', '4', '--hg_depth', '2', '--sigma_max', '10.0', '--sigma_min', '2.0', '--no_numel_eval']
-# job = executor.submit(evalWrapper, cmd)  
-# print(job.job_id)  # ID of your job
->>>>>>> upperbody

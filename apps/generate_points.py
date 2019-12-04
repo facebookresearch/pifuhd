@@ -14,7 +14,6 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 
 from lib.options import BaseOptions
-from lib.visualizer import Visualizer
 from lib.mesh_util import *
 from lib.sample_util import *
 from torchy.data import *
@@ -32,30 +31,8 @@ def precompute_points(opt):
     subjects = dataset.get_subjects()
     
     print('# of subjects: ', len(subjects))
-<<<<<<< HEAD
-    dataset.opt.simga = 5
-    dataset.opt.sampleing_mode = 'uniform_simga5'
-
-    for sub in subjects:
-        dataset.precompute_points(sub, num_files=200)
-
-    # for i in range(1, 10, 2):
-    #     dataset.opt.sigma = float(i)
-    #     dataset.opt.sampleing_mode = 'uniform_simga%d' % i
-    #     for sub in subjects:
-    #         if i == 1 and sub == 'rp_andrew_posed_002':
-    #             flag = True
-    #         if not flag:
-    #             continue
-    #         print(sub, 'sigma', i)
-    #         try:
-    #             dataset.precompute_points(sub, num_files=10)
-    #         except:
-    #             print('failed', sub)
-=======
     for sub in tqdm(subjects):
         dataset.precompute_points(sub, num_files=2, start_id=2*opt.tmp_id, sigma=3.0)
->>>>>>> upperbody
 
 def precompute_tsdf(opt):
     cuda = torch.device('cuda:%d' % opt.gpu_id)
@@ -73,7 +50,7 @@ def pgWrapper(args=None):
 
 import submitit
 def submit():
-    base_cmd =['--dataroot', './../../data/hf_human_big/', '--num_sample_inout', '500000', '--sampling_mode', 'sigma3_uniform']
+    base_cmd =['--dataroot', './../../data/pifu_data/', '--num_sample_inout', '500000', '--sampling_mode', 'sigma3_uniform']
 
     executor = submitit.AutoExecutor(folder="tmp_cluster_log")  # submission interface (logs are dumped in the folder)
     executor.update_parameters(timeout_min=3*60, gpus_per_node=1, cpus_per_task=10, partition="priority", name='wildPIFu', comment='cvpr deadline')  # timeout in min

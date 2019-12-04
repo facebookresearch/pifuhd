@@ -36,7 +36,7 @@ def reconstruction(net, cuda, calib_tensor,
     # Then we define the lambda function for cell evaluation
     def eval_func(points):
         points = np.expand_dims(points, axis=0)
-        points = np.repeat(points, net.num_views, axis=0)
+        points = np.repeat(points, 1, axis=0)
         samples = torch.from_numpy(points).to(device=cuda).float()
         
         net.query(samples, calib_tensor)

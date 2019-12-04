@@ -114,7 +114,6 @@ class RPOtfDatasetParts(RPDataset):
             return self.load_points_sample(subject, calib, mask, self.opt.sigma_surface)
 
     def get_otf_sampling(self, subject, calib, mask, sample_data=None):
-        # test only
         if not self.is_train:
             random.seed(1991)
             np.random.seed(1991)
@@ -240,13 +239,15 @@ class RPOtfDatasetParts(RPDataset):
                 'b_min': self.B_MIN,
                 'b_max': self.B_MAX,
             }
-            render_data = self.get_render(sid, num_views=self.num_views, view_id=vid,
-                                        pid=pid, random_sample=self.opt.random_multiview)
+            render_data = self.get_render(sid, view_id=vid,
+                                        pid=pid)
             if self.opt.num_sample_inout:
-                sample_data = self.get_sample(subject, render_data['calib'][0].numpy(), render_data['mask'][0].numpy()) 
-                sample_data = self.get_otf_sampling(subject, render_data['calib'][0].numpy(), render_data['mask'][0].numpy(), sample_data)
+                sample_data = self.get_sample(subject, render_data['calib'].numpy(), render_data['mask'].numpy()) 
+                sample_data = self.get_otf_sampling(subject, render_data['calib'].numpy(), render_data['mask'].numpy(), sample_data)
             else:
-                sample_data = self.get_otf_sampling(subject, render_data['calib'][0].numpy(), render_data['mask'][0].numpy())
+                sample_data = self.get_otf_sampling(subject, render_data['calib'].numpy(), render_data['mask'].numpy())
+            
+            # for debug only
             # p = sample_data['samples'].t().numpy()
             # calib = render_data['calib'][0].numpy()
             # mask = (255.0*(0.5*render_data['img'][0].permute(1,2,0).numpy()[:,:,::-1]+0.5)).astype(np.uint8)
@@ -259,14 +260,15 @@ class RPOtfDatasetParts(RPDataset):
             # cv2.imwrite('tmp.png', mask)
             # #cv2.waitKey(10)
             # exit()
+
             res.update(render_data)
             res.update(sample_data)
             if self.num_sample_normal:
-                normal_data = self.get_normal_sampling(subject, render_data['calib'][0].numpy())
+                normal_data = self.get_normal_sampling(subject, render_data['calib'].numpy())
                 res.update(normal_data)
             if self.num_sample_color:
                 color_data = self.get_color_sampling(subject, view_id=vid)
-                res.upate(color_data)
+                res.update(color_data)
             return res
         except Exception as e:
             for i in range(10):

@@ -19,7 +19,6 @@ import matplotlib
 from numpy.linalg import inv
 
 from lib.options import BaseOptions
-from lib.visualizer import Visualizer
 from lib.mesh_util import *
 from lib.sample_util import *
 from torchy.data import *
@@ -30,62 +29,6 @@ from PIL import Image
 import torchvision.transforms as transforms
 
 parser = BaseOptions()
-
-def label_to_color(nways, N=10):
-    '''
-    args:
-        nwaysL [N] integer numpy array
-    return:
-        [N, 3] color numpy array
-    '''
-    mapper = cm.ScalarMappable(norm=matplotlib.colors.Normalize(vmin=0, vmax=N), cmap=plt.get_cmap('tab10'))
-
-    colors = []
-    for v in nways.tolist():
-        colors.append(mapper.to_rgba(float(v)))
-
-    return np.stack(colors, 0)[:,:3]
-
-def reshape_multiview_tensors(image_tensor, calib_tensor):
-    '''
-    args:
-        image_tensor: [B, nV, C, H, W]
-        calib_tensor: [B, nV, 3, 4]
-    return:
-        image_tensor: [B*nV, C, H, W]
-        calib_tensor: [B*nV, 3, 4]
-    '''
-    image_tensor = image_tensor.view(
-        image_tensor.shape[0] * image_tensor.shape[1],
-        image_tensor.shape[2],
-        image_tensor.shape[3],
-        image_tensor.shape[4]
-    )
-    calib_tensor = calib_tensor.view(
-        calib_tensor.shape[0] * calib_tensor.shape[1],
-        calib_tensor.shape[2],
-        calib_tensor.shape[3]
-    )
-
-    return image_tensor, calib_tensor
-
-def reshape_sample_tensor(sample_tensor, num_views):
-    '''
-    args:
-        sample_tensor: [B, 3, N] xyz coordinates
-        num_views: number of views
-    return:
-        [B*nV, 3, N] repeated xyz coordinates
-    '''
-    if num_views == 1:
-        return sample_tensor
-    sample_tensor = sample_tensor[:, None].repeat(1, num_views, 1, 1)
-    sample_tensor = sample_tensor.view(
-        sample_tensor.shape[0] * sample_tensor.shape[1],
-        sample_tensor.shape[2],
-        sample_tensor.shape[3]
-    )
-    return sample_tensor
 
 def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True, components=False):
     image_tensor = data['img'].to(device=cuda)
@@ -111,12 +54,6 @@ def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True, compo
             calib_world = data['calib_world'].numpy()[0]
             verts = np.matmul(np.concatenate([verts, np.ones_like(verts[:,:1])],1), inv(calib_world).T)[:,:3]
 
-        # if not components:
-        #     net.calc_normal(verts_tensor, calib_tensor[:1])
-        #     color = net.nmls.detach().cpu().numpy()[0].T
-        # else:
-        #     nways = net.calc_comp_ids(verts_tensor, calib_tensor[:1])
-        #     color = label_to_color(nways[0].detach().cpu().numpy())
         xyz_tensor = net.projection(verts_tensor, calib_tensor[:1])
         uv = xyz_tensor[:, :2, :]
         color = index(image_tensor[:1], uv).detach().cpu().numpy()[0].T
@@ -157,13 +94,12 @@ def recon(opt):
 
     cuda = torch.device('cuda:%d' % opt.gpu_id)
 
-    # test_dataset = EvalDataset(opt)
     test_dataset = EvalWPoseDataset(opt)
 
     print('test data size: ', len(test_dataset))
     projection_mode = test_dataset.projection_mode
 
-    netG = HGHPIFuNet(opt, projection_mode).to(device=cuda)
+    netG = HGPIFuNet(opt, projection_mode).to(device=cuda)
 
     def set_eval():
         netG.eval()

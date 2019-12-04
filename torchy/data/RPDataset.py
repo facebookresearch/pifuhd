@@ -69,8 +69,6 @@ class RPDataset(Dataset):
 
         self.load_size = self.opt.loadSize
 
-        self.num_views = self.opt.num_views
-
         self.num_sample_inout = self.opt.num_sample_inout
         self.num_sample_color = self.opt.num_sample_color
         self.num_sample_normal = self.opt.num_sample_normal
@@ -113,28 +111,22 @@ class RPDataset(Dataset):
     def __len__(self):
         return len(self.subjects) * len(self.yaw_list) * len(self.pitch_list)
 
-    def get_render(self, sid, num_views, pid=0, view_id=None, random_sample=False):
+    def get_render(self, sid, pid=0, view_id=0):
         '''
         Return render data
         args:
             subject: subject name
-            num_views: number of views
             pitch: pitch angle (default: 0)
             view_id: the first view id. if None, select randomly
         return:
-            'img': None, # [num_views, C, H, W] input images
-            'calib': None, # [num_views, 4, 4] calibration matrix
-            'extrinsic': None, # [num_views, 4, 4] extrinsic matrix
-            'mask': None, # [num_views, 1, H, W] segmentation masks
+            'img': None, # [C, H, W] input images
+            'calib': None, # [4, 4] calibration matrix
+            'extrinsic': None, # [4, 4] extrinsic matrix
+            'mask': None, # [1, H, W] segmentation masks
         '''
         subject = self.subjects[sid]
-        if view_id is None:
-            view_id = random.choice(self.yaw_list)
-        # views are sampled evenly unless random_sample is enabled
-        view_ids = [self.yaw_list[(view_id + len(self.yaw_list) // num_views * offset) % len(self.yaw_list)]
-                    for offset in range(num_views)]
-        if random_sample:
-            view_ids = np.random.choices(self.yaw_list, num_views)
+
+        vid = self.yaw_list[view_id]
 
         pitch = self.pitch_list[pid]
 
@@ -145,157 +137,147 @@ class RPDataset(Dataset):
         mask_list = []
         extrinsic_list = []
 
-        for vid in view_ids:
-            param_path = os.path.join(self.PARAM, subject, '%d_%d_%02d.npy' % (vid, pitch, 0))
-            render_path = os.path.join(self.RENDER, subject, '%d_%d_%02d.png' % (vid, pitch, 0))
+        param_path = os.path.join(self.PARAM, subject, '%d_%d_%02d.npy' % (vid, pitch, 0))
+        render_path = os.path.join(self.RENDER, subject, '%d_%d_%02d.png' % (vid, pitch, 0))
 
-            # load calibration data
-            param = np.load(param_path, allow_pickle=True)
-            # pixel unit / world unit
-            ortho_ratio = param.item().get('ortho_ratio')
-            # world unit / model unit
-            scale = param.item().get('scale')
-            # camera center world coordinate
-            center = param.item().get('center')
-            # model rotation
-            R = param.item().get('R')
+        # load calibration data
+        param = np.load(param_path, allow_pickle=True)
+        # pixel unit / world unit
+        ortho_ratio = param.item().get('ortho_ratio')
+        # world unit / model unit
+        scale = param.item().get('scale')
+        # camera center world coordinate
+        center = param.item().get('center')
+        # model rotation
+        R = param.item().get('R')
 
-            translate = -np.matmul(R, center).reshape(3, 1)
-            extrinsic = np.concatenate([R, translate], axis=1)
-            extrinsic = np.concatenate([extrinsic, np.array([0, 0, 0, 1]).reshape(1, 4)], 0)
-            # make sure camera space matches with pixel coordinates [-loadSize//2, loadSize]
-            scale_intrinsic = np.identity(4)
-            scale_intrinsic[0, 0] = scale / ortho_ratio
-            scale_intrinsic[1, 1] = -scale / ortho_ratio # due to discripancy between OpenGL and CV
-            scale_intrinsic[2, 2] = scale / ortho_ratio
+        translate = -np.matmul(R, center).reshape(3, 1)
+        extrinsic = np.concatenate([R, translate], axis=1)
+        extrinsic = np.concatenate([extrinsic, np.array([0, 0, 0, 1]).reshape(1, 4)], 0)
+        # make sure camera space matches with pixel coordinates [-loadSize//2, loadSize]
+        scale_intrinsic = np.identity(4)
+        scale_intrinsic[0, 0] = scale / ortho_ratio
+        scale_intrinsic[1, 1] = -scale / ortho_ratio # due to discripancy between OpenGL and CV
+        scale_intrinsic[2, 2] = scale / ortho_ratio
 
-            # transformation from pixe space to normalized space [-1, 1]
-            ndc_intrinsic = np.identity(4)
-            ndc_intrinsic[0, 0] = 1.0 / float(self.opt.loadSize // 2)
-            ndc_intrinsic[1, 1] = 1.0 / float(self.opt.loadSize // 2)
-            ndc_intrinsic[2, 2] = 1.0 / float(self.opt.loadSize // 2)
+        # transformation from pixe space to normalized space [-1, 1]
+        ndc_intrinsic = np.identity(4)
+        ndc_intrinsic[0, 0] = 1.0 / float(self.opt.loadSize // 2)
+        ndc_intrinsic[1, 1] = 1.0 / float(self.opt.loadSize // 2)
+        ndc_intrinsic[2, 2] = 1.0 / float(self.opt.loadSize // 2)
+        
+        # transformation in normalized coordinates
+        trans_intrinsic = np.identity(4)
+
+        intrinsic = np.matmul(ndc_intrinsic, scale_intrinsic)
+        calib = np.matmul(intrinsic, extrinsic)
+        pose2d = np.matmul(calib, np.concatenate([pose3d, np.ones_like(pose3d[:,:1])], 1).T)
+
+        im = cv2.imread(render_path, cv2.IMREAD_UNCHANGED) / 255.0
+        im[:,:,:3] /= im[:,:,3:] + 1e-8
+        im = (255.0 * im).astype(np.uint8)[:,:,[2,1,0,3]]
+        if self.opt.random_body_chop and np.random.rand() > 0.5 and self.is_train:
+            y_offset = random.randint(-100,0)
+            if y_offset != 0:
+                im[y_offset:,:,3] = 0.0
+        render = Image.fromarray(im[:,:,:3]).convert('RGB')
+        mask = Image.fromarray(im[:,:,3]).convert('L')
+
+        if self.opt.random_bg and len(self.bg_list) != 0:
+            if self.is_train:
+                bg_path = os.path.join(self.BG, random.choice(self.bg_list))
+            else:
+                uid = sid * len(self.yaw_list) * (view_id * len(self.pitch_list) + pitch) 
+                bg_path = os.path.join(self.BG, self.bg_list[uid % len(self.bg_list)])
+            bg = Image.open(bg_path).convert('RGB')
+
+            render = Image.composite(render, bg, mask)
             
-            # transformation in normalized coordinates
-            trans_intrinsic = np.identity(4)
+        if self.phase == 'train':
+            # pad images
+            pad_size = int(0.1 * self.load_size)
+            render = ImageOps.expand(render, pad_size, fill=0)
+            mask = ImageOps.expand(mask, pad_size, fill=0)
 
-            intrinsic = np.matmul(ndc_intrinsic, scale_intrinsic)
-            calib = np.matmul(intrinsic, extrinsic)
-            pose2d = np.matmul(calib, np.concatenate([pose3d, np.ones_like(pose3d[:,:1])], 1).T)
+            w, h = render.size
+            tw, th = self.load_size, self.load_size
 
-            im = cv2.imread(render_path, cv2.IMREAD_UNCHANGED) / 255.0
-            im[:,:,:3] /= im[:,:,3:] + 1e-8
-            im = (255.0 * im).astype(np.uint8)[:,:,[2,1,0,3]]
-            if self.opt.random_body_chop and np.random.rand() > 0.5 and self.is_train:
-                y_offset = random.randint(-100,0)
-                if y_offset != 0:
-                    im[y_offset:,:,3] = 0.0
-            render = Image.fromarray(im[:,:,:3]).convert('RGB')
-            mask = Image.fromarray(im[:,:,3]).convert('L')
+            # random flip
+            if self.opt.random_flip and np.random.rand() > 0.5 and self.is_train:
+                scale_intrinsic[0, 0] *= -1
+                render = transforms.RandomHorizontalFlip(p=1.0)(render)
+                mask = transforms.RandomHorizontalFlip(p=1.0)(mask)
 
-            if self.opt.random_bg and len(self.bg_list) != 0:
-                if self.is_train:
-                    bg_path = os.path.join(self.BG, random.choice(self.bg_list))
-                else:
-                    uid = sid * len(self.yaw_list) * (view_id * len(self.pitch_list) + pitch) 
-                    bg_path = os.path.join(self.BG, self.bg_list[uid % len(self.bg_list)])
-                bg = Image.open(bg_path).convert('RGB')
+            # random scale 
+            if self.opt.random_scale:
+                rand_scale = random.uniform(0.8, 1.4)
+                w = int(rand_scale * w)
+                h = int(rand_scale * h)
+                render = render.resize((w, h), Image.BILINEAR)
+                mask = mask.resize((w, h), Image.NEAREST)
+                scale_intrinsic *= rand_scale
+                scale_intrinsic[3, 3] = 1
+            
+            if self.opt.random_rotate:
+                rotate_degree = (random.random()-0.5) * 2 * 10.0
+                theta = -(rotate_degree/180.) * np.pi
+                rotMatrix = np.array([[np.cos(theta), -np.sin(theta)], 
+                                    [np.sin(theta),  np.cos(theta)]])
+                center = np.array([[render.size[0]/2,render.size[1]/2]])
+                rot_matrix = np.identity(4)
+                rot_matrix[:2,:2] = rotMatrix
 
-                render = Image.composite(render, bg, mask)
-                
-            if self.phase == 'train' and self.num_views < 2:
-                # pad images
-                pad_size = int(0.1 * self.load_size)
-                render = ImageOps.expand(render, pad_size, fill=0)
-                mask = ImageOps.expand(mask, pad_size, fill=0)
+                scale_intrinsic = np.matmul(rot_matrix, scale_intrinsic)
+                render = render.rotate(rotate_degree, Image.BILINEAR)
+                mask = mask.rotate(rotate_degree, Image.BILINEAR)
 
+            # random translate in the pixel space
+            if self.opt.random_trans:
+                padding = int(1.1 * tw - w)
+                if padding > 0:
+                    render = ImageOps.expand(render, border=(padding,padding), fill=0)
+                    mask = ImageOps.expand(mask, border=(padding, padding), fill=0)
                 w, h = render.size
-                tw, th = self.load_size, self.load_size
+                dx = random.randint(-int(round((w-tw)/8.0)),
+                                    int(round((w-tw)/8.0)))
+                dy = random.randint(-int(round((h-th)/8.0)),
+                                    int(round((h-th)/8.0)))
+                trans_intrinsic[0, 3] = (-dx) / float(self.opt.loadSize // 2)
+                trans_intrinsic[1, 3] = (-dy) / float(self.opt.loadSize // 2)
+            else:
+                dx = 0
+                dy = 0
 
-                # random flip
-                if self.opt.random_flip and np.random.rand() > 0.5 and self.is_train:
-                    scale_intrinsic[0, 0] *= -1
-                    render = transforms.RandomHorizontalFlip(p=1.0)(render)
-                    mask = transforms.RandomHorizontalFlip(p=1.0)(mask)
+            x1 = int(round((w - tw) / 2.)) + dx
+            y1 = int(round((h - th) / 2.)) + dy
 
-                # random scale 
-                if self.opt.random_scale:
-                    rand_scale = random.uniform(0.8, 1.4)
-                    w = int(rand_scale * w)
-                    h = int(rand_scale * h)
-                    render = render.resize((w, h), Image.BILINEAR)
-                    mask = mask.resize((w, h), Image.NEAREST)
-                    scale_intrinsic *= rand_scale
-                    scale_intrinsic[3, 3] = 1
-                
-                if self.opt.random_rotate:
-                    rotate_degree = (random.random()-0.5) * 2 * 10.0
-                    theta = -(rotate_degree/180.) * np.pi
-                    rotMatrix = np.array([[np.cos(theta), -np.sin(theta)], 
-                                        [np.sin(theta),  np.cos(theta)]])
-                    center = np.array([[render.size[0]/2,render.size[1]/2]])
-                    rot_matrix = np.identity(4)
-                    rot_matrix[:2,:2] = rotMatrix
+            render = render.crop((x1, y1, x1 + tw, y1 + th))
+            mask = mask.crop((x1, y1, x1 + tw, y1 + th))
 
-                    scale_intrinsic = np.matmul(rot_matrix, scale_intrinsic)
-                    render = render.rotate(rotate_degree, Image.BILINEAR)
-                    mask = mask.rotate(rotate_degree, Image.BILINEAR)
+            # image augmentation
+            render = self.aug_trans(render)
 
-                # random translate in the pixel space
-                if self.opt.random_trans:
-                    padding = int(1.1 * tw - w)
-                    if padding > 0:
-                        render = ImageOps.expand(render, border=(padding,padding), fill=0)
-                        mask = ImageOps.expand(mask, border=(padding, padding), fill=0)
-                    w, h = render.size
-                    dx = random.randint(-int(round((w-tw)/8.0)),
-                                        int(round((w-tw)/8.0)))
-                    dy = random.randint(-int(round((h-th)/8.0)),
-                                        int(round((h-th)/8.0)))
-                    trans_intrinsic[0, 3] = (-dx) / float(self.opt.loadSize // 2)
-                    trans_intrinsic[1, 3] = (-dy) / float(self.opt.loadSize // 2)
-                else:
-                    dx = 0
-                    dy = 0
+            if self.opt.aug_blur > 0.00001:
+                blur = GaussianBlur(np.random.uniform(0, self.opt.aug_blur))
+                render = render.filter(blur)
 
-                x1 = int(round((w - tw) / 2.)) + dx
-                y1 = int(round((h - th) / 2.)) + dy
+        intrinsic = np.matmul(trans_intrinsic, np.matmul(ndc_intrinsic, scale_intrinsic))
+        calib = torch.Tensor(np.matmul(intrinsic, extrinsic)).float()
+        extrinsic = torch.Tensor(extrinsic).float()
 
-                render = render.crop((x1, y1, x1 + tw, y1 + th))
-                mask = mask.crop((x1, y1, x1 + tw, y1 + th))
+        render = self.to_tensor(render)
 
-                # image augmentation
-                render = self.aug_trans(render)
+        mask = transforms.Resize(self.load_size)(mask)
+        mask = transforms.ToTensor()(mask).float()
 
-                if self.opt.aug_blur > 0.00001:
-                    blur = GaussianBlur(np.random.uniform(0, self.opt.aug_blur))
-                    render = render.filter(blur)
-
-            intrinsic = np.matmul(trans_intrinsic, np.matmul(ndc_intrinsic, scale_intrinsic))
-            calib = torch.Tensor(np.matmul(intrinsic, extrinsic)).float()
-            extrinsic = torch.Tensor(extrinsic).float()
-
-            render = self.to_tensor(render)
-
-            mask = transforms.Resize(self.load_size)(mask)
-            mask = transforms.ToTensor()(mask).float()
-            mask_list.append(mask)
-
-            if not self.opt.random_bg or len(self.bg_list) == 0:                
-                render = mask.expand_as(render) * render
-
-            # img = render.permute(1,2,0).numpy()[:,:,::-1]
-            # cv2.imshow('image', (0.5*img + 0.5))
-            # cv2.waitKey(1)
-
-            render_list.append(render)
-            calib_list.append(calib)
-            extrinsic_list.append(extrinsic)
+        if not self.opt.random_bg or len(self.bg_list) == 0:                
+            render = mask.expand_as(render) * render
 
         return {
-            'img': torch.stack(render_list, dim=0),
-            'calib': torch.stack(calib_list, dim=0),
-            'extrinsic': torch.stack(extrinsic_list, dim=0),
-            'mask': torch.stack(mask_list, dim=0)
+            'img': render,
+            'calib': calib,
+            'extrinsic': extrinsic,
+            'mask': mask
         }
 
     def select_sampling_method(self, subject, calib):
@@ -449,9 +431,11 @@ class RPDataset(Dataset):
                 'b_min': self.B_MIN,
                 'b_max': self.B_MAX,
             }
-            render_data = self.get_render(sid, num_views=self.num_views, view_id=vid,
-                                        pid=pid, random_sample=self.opt.random_multiview)
-            sample_data = self.select_sampling_method(subject, render_data['calib'][0].numpy(), render_data['mask'][0].numpy())        
+            render_data = self.get_render(sid, view_id=vid,
+                                        pid=pid)
+            sample_data = self.select_sampling_method(subject, render_data['calib'].numpy(), render_data['mask'].numpy())
+
+            # for debug only 
             # p = sample_data['samples'].t().numpy()
             # calib = render_data['calib'][0].numpy()
             # mask = 255.0*np.stack(3*[render_data['mask'][0,0].numpy()],2)
@@ -463,6 +447,7 @@ class RPDataset(Dataset):
             # print(mask.shape)
             # cv2.imwrite('tmp.png', mask)
             # exit()
+
             res.update(render_data)
             res.update(sample_data)
             if self.num_sample_normal:
@@ -478,32 +463,3 @@ class RPDataset(Dataset):
 
     def __getitem__(self, index):
         return self.get_item(index)
-
-def test(is_train=True):
-
-    max_yaw_angle = 10
-    max_pitch_angle = 5
-    interval_yaw = 2
-    interval_pitch = 5
-    yaw_size = max_yaw_angle
-    intv_yaw = interval_yaw
-    pitch_size = 2 * max_pitch_angle + 1
-    intv_pitch = interval_pitch
-
-    yaw_val = yaw_size - yaw_size // intv_yaw if is_train else yaw_size // intv_yaw
-    pitch_val = pitch_size - pitch_size // intv_pitch - 1 if is_train else pitch_size // intv_pitch + 1
-        
-    for tmp in range(0, yaw_val * pitch_val):
-        if is_train:
-            vid = tmp % yaw_val
-            pid = tmp // yaw_val
-            vid = intv_yaw * (vid // (intv_yaw - 1)) + vid % (intv_yaw - 1) + 1
-            pid = intv_pitch * (pid // (intv_pitch- 1)) + pid % (intv_pitch - 1) + 1 - max_pitch_angle
-        else:
-            vid = tmp % yaw_val
-            pid = tmp // yaw_val
-            vid = intv_yaw * vid
-            pid = intv_pitch * pid - max_pitch_angle
-
-if __name__ in '__main__':
-    test(True)

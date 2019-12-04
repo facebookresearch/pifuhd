@@ -105,6 +105,7 @@ def face_crop(pts):
 
     return (x1, y1, x2-x1, y2-y1)
 
+
 def upperbody_crop(pts):
     flag = pts[:,2] > 0.2
 
@@ -198,7 +199,7 @@ class RPDatasetPartsMR(Dataset):
 
         self.root = self.opt.dataroot
 
-        self.PARAM_WB = os.path.join(self.root, '../hf_human_big', 'PARAM')
+        self.PARAM_WB = os.path.join(self.root, 'PARAM_WB')
 
         self.RENDER = os.path.join(self.root, 'RENDER')
         self.MASK = os.path.join(self.root, 'MASK')
@@ -217,8 +218,6 @@ class RPDatasetPartsMR(Dataset):
         
         self.B_MIN = np.array([-128, -28, -128])
         self.B_MAX = np.array([128, 228, 128])
-        # self.B_MIN = np.array([-120, -20, -64])
-        # self.B_MAX = np.array([120, 220, 64])
 
         try:
             file = open(os.path.join(self.root,'info.txt'),'r')
@@ -242,6 +241,7 @@ class RPDatasetPartsMR(Dataset):
         self.load_size_local = self.opt.loadSizeLocal
 
         self.num_sample_inout = self.opt.num_sample_inout
+        self.num_sample_surface = self.opt.num_sample_surface
         self.num_sample_color = self.opt.num_sample_color
         self.num_sample_normal = self.opt.num_sample_normal
 
@@ -304,19 +304,23 @@ class RPDatasetPartsMR(Dataset):
     def __len__(self):
         return len(self.subjects) * len(self.yaw_list) * len(self.pitch_list)
 
-    def get_render(self, sid, vid=0, pid=0, random_sample=False):
+    def get_render(self, sid, vid=0, pid=0):
         '''
         Return render data
         args:
-            subject: subject name
-            num_views: number of views
-            pitch: pitch angle (default: 0)
-            view_id: the first view id. if None, select randomly
+            sid: subject id
+            pid: pitch id
+            vid: view id.
         return:
-            'img': None, # [num_views, C, H, W] input images
-            'calib': None, # [num_views, 4, 4] calibration matrix
-            'extrinsic': None, # [num_views, 4, 4] extrinsic matrix
-            'mask': None, # [num_views, 1, H, W] segmentation masks
+            'img_global': [C, H, W] image image
+            'calib_global': [4, 4] calibration matrix
+            'mask_global': [1, H, W] mask image
+            'img_local': [num_local, C, H', W'] cropped images
+            'calib_local': [num_local, 4, 4] calibration matrix for each cropping
+            'mask_local': [num_local, 1, H', W'] cropped mask
+            'extrinsic': [4, 4] extrinsic matrix
+            'files': file paths
+            'rect': [num_local, 4] (x1, y1, x2, y2) rectangles used for cropping
         '''
         subject = self.subjects[sid]
         pitch = self.pitch_list[pid]
@@ -381,14 +385,15 @@ class RPDatasetPartsMR(Dataset):
         intrinsic = np.matmul(scale_intrinsic, ndc_intrinsic)
 
         # for rendering with different resolution
-        param_wb_path = os.path.join(self.PARAM_WB, subject, '%d_%d_%02d.npy' % (vid, pitch, 0))
-        param_wb = np.load(param_wb_path, allow_pickle=True)
-
-        # camera center world coordinate
-        dp = np.matmul(R, (center - param_wb.item().get('center'))[:,None])[:,0]
-        dp[0] *= -1.0
-        s = scale / param_wb.item().get('scale')
-        keypoints[:,:2] = s * (keypoints[:,:2] + param_wb.item().get('scale') * dp[None,:2] / ortho_ratio - 512) + 512
+        # please comment out this part if the correspoinding 2d joints are available
+        # currently I'm resuing detected 2d joints for images with different transformation
+        if True:
+            param_wb_path = os.path.join(self.PARAM_WB, subject, '%d_%d_%02d.npy' % (vid, pitch, 0))
+            param_wb = np.load(param_wb_path, allow_pickle=True)
+            dp = np.matmul(R, (center - param_wb.item().get('center'))[:,None])[:,0]
+            dp[0] *= -1.0
+            s = scale / param_wb.item().get('scale')
+            keypoints[:,:2] = s * (keypoints[:,:2] + param_wb.item().get('scale') * dp[None,:2] / ortho_ratio - 512) + 512
 
         trans_mat = np.identity(4)
         rect = self.crop_func(keypoints)
@@ -483,10 +488,14 @@ class RPDatasetPartsMR(Dataset):
         render_big = render.resize((self.load_size_big,self.load_size_big), Image.BILINEAR)
         mask_big = mask.resize((self.load_size_big,self.load_size_big), Image.NEAREST)
 
+        pose_proj = np.matmul(np.concatenate([pose3d, np.ones_like(pose3d[:,:1])], 1), np.matmul(intrinsic, extrinsic).T)[:,:2]
+        pose_proj = self.load_size_big * (0.5 * pose_proj + 0.5)
+
         # resize to load size
         calib_local_list = []
         render_local_list = []
         mask_local_list = []
+        rect_list = []
         if self.is_train:
             mergin = (self.load_size_big-self.load_size_local)//2
             cnt = 0
@@ -494,10 +503,19 @@ class RPDatasetPartsMR(Dataset):
                 cnt += 1
                 if cnt > 5 * self.opt.num_local:
                     raise IOError('file has something wrong!')
-                dx = random.randint(-mergin,
-                                    mergin)
-                dy = random.randint(-mergin,
-                                    mergin)
+
+                if random.random() < 0.1:
+                    idx = random.choice([0,4,7])
+                    disp = pose_proj[idx] + np.random.normal(loc=0.0, scale=10.0, size=(2))
+                    disp = disp.astype(np.int32) - np.array([self.load_size_big//2,self.load_size_big//2])
+                    disp = disp.clip(min=-mergin, max=mergin)
+                    dx = disp[0]
+                    dy = disp[1]
+                else:
+                    dx = random.randint(-mergin,
+                                        mergin)
+                    dy = random.randint(-mergin,
+                                        mergin)
 
                 x1 = mergin + dx
                 y1 = mergin + dy
@@ -519,6 +537,8 @@ class RPDatasetPartsMR(Dataset):
                 calib_local_list.append(calib_local)
                 mask_local_list.append(mask_local)
                 render_local_list.append(render_local)
+
+                rect_list.append([x1, y1, x1 + self.load_size_local, y1 + self.load_size_local])
         else:
             calib_local = torch.Tensor(np.matmul(intrinsic, extrinsic)).float()
             mask_local = transforms.ToTensor()(mask_big).float()
@@ -526,7 +546,8 @@ class RPDatasetPartsMR(Dataset):
 
             calib_local_list.append(calib_local)
             mask_local_list.append(mask_local)
-            render_local_list.append(render_local)        
+            render_local_list.append(render_local)
+            rect_list.append([0, 0, self.load_size_big, self.load_size_big])
 
         w, h = render.size
         render_global = render.resize((self.load_size, self.load_size), Image.BILINEAR)
@@ -538,10 +559,6 @@ class RPDatasetPartsMR(Dataset):
         calib_global = torch.Tensor(np.matmul(intrinsic, extrinsic)).float()
         extrinsic = torch.Tensor(extrinsic).float()
 
-        # img = render.permute(1,2,0).numpy()[:,:,::-1]
-        # cv2.imshow('image', (0.5*img + 0.5))
-        # cv2.waitKey(1)
-
         return {
             'img_global': render_global,
             'calib_global': calib_global,
@@ -550,7 +567,8 @@ class RPDatasetPartsMR(Dataset):
             'calib_local': torch.stack(calib_local_list, dim=0),
             'mask_local': torch.stack(mask_local_list, dim=0),
             'extrinsic': extrinsic,
-            'files': render_path
+            'files': render_path,
+            'rect': torch.LongTensor(rect_list)
         }
 
     def get_sample(self, subject, calib, mask=None):
@@ -611,21 +629,6 @@ class RPDatasetPartsMR(Dataset):
         in_pts = pts[in_mask]
         out_pts = pts[out_mask]
 
-        # rand_pts = np.concatenate(
-        #     [2.0 * np.random.rand(self.num_sample_inout, 3) - 1.0, np.ones((self.num_sample_inout, 1))],
-        #     1)  # [-1,1]
-        # x = (self.load_size * (0.5 * rand_pts[:,0] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
-        # y = (self.load_size * (0.5 * rand_pts[:,1] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
-        # idx = y * self.load_size + x
-        # inmask = mask.reshape(-1)[idx] > 0.0
-        # rand_pts = np.matmul(rand_pts, inv(calib).T)[:, :3]
-
-        # in_max = in_pts.max(0) + 5.0
-        # in_min = in_pts.min(0) - 5.0
-        # bbox_in = np.logical_and(np.logical_and(inmask, rand_pts[:,2] < in_max[2]), rand_pts[:,2] > in_min[2])
-        # rand_pts = rand_pts[np.logical_not(bbox_in)][:int(self.opt.uniform_ratio*self.num_sample_inout)]
-        # out_pts = np.concatenate([out_pts, rand_pts], 0)
-
         samples = np.concatenate([in_pts, out_pts], 0)
         labels = np.concatenate([np.ones((in_pts.shape[0], 1)), np.zeros((out_pts.shape[0], 1))], 0)
         ratio = float(out_pts.shape[0])/float(samples.shape[0])
@@ -633,7 +636,7 @@ class RPDatasetPartsMR(Dataset):
         if ratio > 0.99:
             raise IOError('invalid data sample')
 
-        if samples.shape[0] != self.opt.num_sample_inout:# + int(self.opt.uniform_ratio * self.num_sample_inout):
+        if samples.shape[0] != self.opt.num_sample_inout:
             raise IOError('unable to sample sufficient number of points')
 
         samples = torch.Tensor(samples.T).float()
@@ -645,109 +648,43 @@ class RPDatasetPartsMR(Dataset):
             'ratio': ratio
         }
 
-    def get_otf_sampling(self, subject, calib, mask, sample_data=None):
-            # test only
-        if not self.is_train:
-            random.seed(1991)
-            np.random.seed(1991)
-            sigma = 10.0
-        else:
-            sigma = self.opt.sigma
-        
-        mesh = copy.deepcopy(g_mesh_dics[subject])
-        surface_points = None
-        ratio = 1.0 - self.opt.uniform_ratio
-        sample_size = int(1.5 * ratio * self.opt.num_sample_surface)
-        for i in range(10):
-            sample_points, fid = trimesh.sample.sample_surface(mesh, int(10 * sample_size))
-            ptsh = np.matmul(np.concatenate([sample_points, np.ones((sample_points.shape[0],1))], 1), calib.T)[:, :3]
-            inbb = (ptsh[:, 0] >= -1) & (ptsh[:, 0] <= 1) & (ptsh[:, 1] >= -1) & \
-                    (ptsh[:, 1] <= 1) & (ptsh[:, 2] >= -1) & (ptsh[:, 2] <= 1)
-            x = (self.load_size * (0.5 * ptsh[:,0] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
-            y = (self.load_size * (0.5 * ptsh[:,1] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
-            idx = y * self.load_size + x
-            inmask = mask.reshape(-1)[idx] > 0
-            inmask = inmask & inbb
-            sample_points = sample_points[inmask]
-            if surface_points is None:
-                surface_points = sample_points
-            else:
-                surface_points = np.concatenate([surface_points, sample_points], 0)
-            if surface_points.shape[0] >= sample_size:
-                surface_points = surface_points[:sample_size]
-                break
-            if i == 9:
-                raise IOError('failed surface point sampling %s' % subject)
+    def get_point_sampling(self, subject, calibs, num_files=100):
+        SAMPLE_DIR = os.path.join(self.SAMPLE, self.opt.sampling_mode, subject)
 
-        theta = 2.0 * math.pi * np.random.rand(surface_points.shape[0])
-        phi = np.arccos(1 - 2 * np.random.rand(surface_points.shape[0]))
-        x = np.sin(phi) * np.cos(theta)
-        y = np.sin(phi) * np.sin(theta)
-        z = np.cos(phi)
-        dir = np.stack([x,y,z],1)
-        radius = np.random.normal(scale=sigma, size=[surface_points.shape[0],1])
-        sample_points = surface_points + radius * dir
+        rand_idx = np.random.randint(num_files)
+        npy_file = os.path.join(SAMPLE_DIR, '%05d.io.npy' % rand_idx)
 
-        random_points = np.concatenate(
-            [2.0 * np.random.rand(int(1.5*(1.0-ratio)*self.opt.num_sample_surface), 3) - 1.0, np.ones((int(1.5*(1.0-ratio)*self.opt.num_sample_surface), 1))],
-            1)  # [-1,1]
-        random_points = np.matmul(random_points, inv(calib).T)[:, :3]
-        sample_points = np.concatenate([sample_points, random_points], 0)
-        np.random.shuffle(sample_points)
+        pts = np.load(npy_file, allow_pickle=True).item()
 
-        ptsh = np.matmul(np.concatenate([sample_points, np.ones((sample_points.shape[0],1))], 1), calib.T)[:, :3]
-        inbb = (ptsh[:, 0] >= -1) & (ptsh[:, 0] <= 1) & (ptsh[:, 1] >= -1) & \
-               (ptsh[:, 1] <= 1) & (ptsh[:, 2] >= -1) & (ptsh[:, 2] <= 1)
+        sample_points = np.concatenate([pts['in'],pts['out']], 0)
+        labels = np.concatenate([np.ones((pts['in'].shape[0],1)), np.zeros((pts['out'].shape[0], 1))], 0)
 
-        sample_points = sample_points[inbb]
-        sample_points = sample_points[:self.opt.num_sample_surface]
+        labels_list = []
+        samples_list = []
+        ptsh = np.matmul(calibs, np.concatenate([sample_points.T, np.ones((1,sample_points.shape[0]))],0))[:,:3,:]
+        inbb = (ptsh > -1) & (ptsh < 1)
 
-        if sample_points.shape[0] != self.opt.num_sample_surface:
-            ptshh = np.matmul(np.concatenate([sample_points, np.ones((sample_points.shape[0],1))], 1), calib.T)[:, :3]
-            x = (self.load_size * (0.5 * ptshh[:,0] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
-            y = (self.load_size * (0.5 * ptshh[:,1] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
+        for i in range(calibs.shape[0]):
+            inbb_i = inbb[i, 0] & inbb[i, 1]
 
-            img = 255.0*np.stack(3*[mask[0]],2)
-            for p in np.stack([x,y],1):
-                img = cv2.circle(img, (int(p[0]),int(p[1])), 2, (0,255.0,0), -1)
-            img = cv2.putText(img, subject, (5, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 0, 0), lineType=cv2.LINE_AA) 
-            cv2.imwrite('tmp/%s.png' % subject, img)
+            sample_points_sub = sample_points[inbb_i]
+            labels_sub = labels[inbb_i]
 
-            raise IOError('unable to sample sufficient number of points %s' % subject)
+            if sample_points_sub.shape[0] == 0:
+                raise IOError('no overlap in the projection.')
 
-        inside = mesh.contains(sample_points)
+            if self.num_sample_surface:
+                sample_list = random.choices(range(0, sample_points_sub.shape[0] - 1), k=self.num_sample_surface)
+                sample_points_sub = sample_points_sub[sample_list]
+                labels_sub = labels_sub[sample_list]
+            
+            labels_list.append(torch.Tensor(labels_sub.T).float())
+            samples_list.append(torch.Tensor(sample_points_sub.T).float())
 
-        ptsh = ptsh[inbb][:self.opt.num_sample_surface]
-        x = (self.load_size * (0.5 * ptsh[:,0] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
-        y = (self.load_size * (0.5 * ptsh[:,1] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
-        idx = y * self.load_size + x
-        inmask = mask.reshape(-1)[idx] > 0
-        inside = inside & inmask
-        
-        inside_points = sample_points[inside]
-        outside_points = sample_points[np.logical_not(inside)]
-
-        samples = np.concatenate([inside_points, outside_points], 0).T # [3, N]
-        labels = np.concatenate([np.ones((1, inside_points.shape[0])), np.zeros((1, outside_points.shape[0]))], 1)
-        ratio = outside_points.shape[0] / samples.shape[1]
-
-        samples = torch.Tensor(samples).float()
-        labels = torch.Tensor(labels).float()
-        
-        del mesh
-        gc.collect()
-
-        if sample_data is not None:
-            sample_data['samples'] = torch.cat([sample_data['samples'], samples],1)
-            sample_data['labels'] = torch.cat([sample_data['labels'], labels],1)
-            sample_data['ratio'] = 1.0 - sample_data['labels'].sum().item() / sample_data['labels'].size(1)
-            return sample_data
-        else:
-            return {
-                'samples': samples,
-                'labels': labels,
-                'ratio': ratio
-            }
+        return {
+            'samples': torch.stack(samples_list, dim=0),
+            'labels': torch.stack(labels_list, dim=0)
+        }
 
     def get_normal_sampling(self, subject, calibs, images):
         uv_pos_path = os.path.join(self.UV_POS, subject, '%02d.exr' % (0))
@@ -886,27 +823,23 @@ class RPDatasetPartsMR(Dataset):
             }
             render_data = self.get_render(sid, vid=vid, pid=pid)
             res.update(render_data)
-            if self.opt.num_sample_inout:
-                sample_data = self.get_sample(subject, render_data['calib_global'].numpy(), render_data['mask_global'].numpy()) 
-                sample_data = self.get_otf_sampling(subject, render_data['calib_global'].numpy(), render_data['mask_global'].numpy(), sample_data)
-            else:
-                sample_data = self.get_otf_sampling(subject, render_data['calib_global'].numpy(), render_data['mask_global'].numpy())
-            if self.opt.num_sample_inout + self.opt.num_sample_surface:
+            sample_data = self.get_point_sampling(subject, render_data['calib_local'].numpy())
+            if self.opt.num_sample_surface:
                 res.update(sample_data)
+
+            # for debug only
             # for i in range(self.opt.num_local):
-            #     p = sample_data['samples'].t().numpy()
+            #     p = sample_data['samples'][i].t().numpy()
             #     calib = render_data['calib_local'][i].numpy()
             #     mask = (255.0*(0.5*render_data['img_local'][i].permute(1,2,0).numpy()[:,:,::-1]+0.5)).astype(np.uint8)
             #     p = np.matmul(np.concatenate([p, np.ones((p.shape[0],1))], 1), calib.T)[:, :3]
 
-            #     pts = 512*(0.5*p[sample_data['labels'].numpy().reshape(-1) == 1.0]+0.5)
+            #     pts = mask.shape[0]*(0.5*p[sample_data['labels'][i].numpy().reshape(-1) == 1.0]+0.5)
             #     for p in pts:
             #         mask = cv2.circle(mask, (int(p[0]),int(p[1])), 2, (0,255.0,0), -1)
             #     mask = cv2.putText(mask, render_data['files'], (5, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 0, 0), lineType=cv2.LINE_AA) 
             #     cv2.imwrite('tmp/%s_%d.png' % (subject, i), mask)
-            #exit()
             # exit()
-            # cv2.waitKey(1000)
             
             if self.num_sample_normal:
                 normal_data = self.get_normal_sampling(subject, render_data['calib_local'].numpy(), render_data['img_local'].numpy())
@@ -916,7 +849,6 @@ class RPDatasetPartsMR(Dataset):
                 res.update(color_data)
             return res
         except Exception as e:
-            # print(e)
             for i in range(10):
                 try:
                     return self.get_item(index=random.randint(0, self.__len__() - 1)) 
@@ -925,32 +857,3 @@ class RPDatasetPartsMR(Dataset):
 
     def __getitem__(self, index):
         return self.get_item(index)
-
-def test(is_train=True):
-
-    max_yaw_angle = 10
-    max_pitch_angle = 5
-    interval_yaw = 2
-    interval_pitch = 5
-    yaw_size = max_yaw_angle
-    intv_yaw = interval_yaw
-    pitch_size = 2 * max_pitch_angle + 1
-    intv_pitch = interval_pitch
-
-    yaw_val = yaw_size - yaw_size // intv_yaw if is_train else yaw_size // intv_yaw
-    pitch_val = pitch_size - pitch_size // intv_pitch - 1 if is_train else pitch_size // intv_pitch + 1
-        
-    for tmp in range(0, yaw_val * pitch_val):
-        if is_train:
-            vid = tmp % yaw_val
-            pid = tmp // yaw_val
-            vid = intv_yaw * (vid // (intv_yaw - 1)) + vid % (intv_yaw - 1) + 1
-            pid = intv_pitch * (pid // (intv_pitch- 1)) + pid % (intv_pitch - 1) + 1 - max_pitch_angle
-        else:
-            vid = tmp % yaw_val
-            pid = tmp // yaw_val
-            vid = intv_yaw * vid
-            pid = intv_pitch * pid - max_pitch_angle
-
-if __name__ in '__main__':
-    test(True)

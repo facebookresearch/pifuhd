@@ -16,7 +16,6 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 from lib.options import BaseOptions
-from lib.visualizer import Visualizer
 from lib.mesh_util import *
 from lib.sample_util import *
 from torchy.data import *
@@ -26,50 +25,9 @@ from torchy.net_util import CustomBCELoss, CustomMSELoss
 
 parser = BaseOptions()
 
-def reshape_multiview_tensors(image_tensor, calib_tensor):
-    '''
-    args:
-        image_tensor: [B, nV, C, H, W]
-        calib_tensor: [B, nV, 3, 4]
-    return:
-        image_tensor: [B*nV, C, H, W]
-        calib_tensor: [B*nV, 3, 4]
-    '''
-    image_tensor = image_tensor.view(
-        image_tensor.shape[0] * image_tensor.shape[1],
-        image_tensor.shape[2],
-        image_tensor.shape[3],
-        image_tensor.shape[4]
-    )
-    calib_tensor = calib_tensor.view(
-        calib_tensor.shape[0] * calib_tensor.shape[1],
-        calib_tensor.shape[2],
-        calib_tensor.shape[3]
-    )
-
-    return image_tensor, calib_tensor
-
-def reshape_sample_tensor(sample_tensor, num_views):
-    '''
-    args:
-        sample_tensor: [B, 3, N] xyz coordinates
-        num_views: number of views
-    return:
-        [B*nV, 3, N] repeated xyz coordinates
-    '''
-    if num_views == 1:
-        return sample_tensor
-    sample_tensor = sample_tensor[:, None].repeat(1, num_views, 1, 1)
-    sample_tensor = sample_tensor.view(
-        sample_tensor.shape[0] * sample_tensor.shape[1],
-        sample_tensor.shape[2],
-        sample_tensor.shape[3]
-    )
-    return sample_tensor
-
 def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True):
-    image_tensor = data['img'].to(device=cuda)
-    calib_tensor = data['calib'].to(device=cuda)
+    image_tensor = data['img'].to(device=cuda).unsqueeze(0)
+    calib_tensor = data['calib'].to(device=cuda).unsqueeze(0)
 
     net.filter(image_tensor)
     if net.opt.use_front_normal:
@@ -90,8 +48,7 @@ def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True):
         verts, faces, _, _ = reconstruction(
             net, cuda, calib_tensor, res, b_min, b_max, thresh, use_octree=use_octree)
         verts_tensor = torch.from_numpy(verts.T).unsqueeze(0).to(device=cuda).float()
-        # net.calc_normal(verts_tensor, calib_tensor[:1])
-        # color = net.nmls.detach().cpu().numpy()[0].T
+
         xyz_tensor = net.projection(verts_tensor, calib_tensor[:1])
         uv = xyz_tensor[:, :2, :]
         color = index(image_tensor[:1], uv).detach().cpu().numpy()[0].T
@@ -163,12 +120,10 @@ def calc_error(opt, net, cuda, dataset, num_tests, label=None, thresh=0.5):
         for idx in tqdm(range(num_tests)):
             data = dataset[idx * len(dataset) // num_tests]
             # retrieve the data
-            image_tensor = data['img'].to(device=cuda)
-            calib_tensor = data['calib'].to(device=cuda)
+            image_tensor = data['img'].to(device=cuda).unsqueeze(0)
+            calib_tensor = data['calib'].to(device=cuda).unsqueeze(0)
             sample_tensor = data['samples'].to(device=cuda).unsqueeze(0)
             gamma_tensor = torch.Tensor([data['ratio']]).float().to(device=cuda).unsqueeze(0)
-            if opt.num_views > 1:
-                sample_tensor = reshape_sample_tensor(sample_tensor, opt.num_views)
             label_tensor = data['labels'].to(device=cuda).unsqueeze(0)
             if opt.num_sample_normal:
                 sample_nml_tensor = data['samples_nml'].to(device=cuda).unsqueeze(0)
@@ -252,12 +207,7 @@ def train(opt):
 
     cuda = torch.device('cuda:%d' % opt.gpu_id)
 
-    vis = Visualizer(opt)
-
-    if opt.use_tsdf:
-        train_dataset = RPTSDFDataset(opt, phase='train')
-        test_dataset = RPTSDFDataset(opt, phase='val')
-    elif opt.sampling_otf and opt.sampling_parts:
+    if opt.sampling_otf and opt.sampling_parts:
         train_dataset = RPOtfDatasetParts(opt, phase='train')
         test_dataset = RPOtfDatasetParts(opt, phase='val')
     elif opt.sampling_otf:
@@ -286,8 +236,6 @@ def train(opt):
     criteria = {}
     if opt.occ_loss_type == 'bce':
         criteria['occ'] = CustomBCELoss(False, opt.occ_gamma)
-    elif opt.occ_loss_type == 'brock_bce':
-        criteria['occ'] = CustomBCELoss(True, opt.occ_gamma)
     elif opt.occ_loss_type == 'mse':
         criteria['occ'] = CustomMSELoss(opt.occ_gamma)
     else:
@@ -326,15 +274,6 @@ def train(opt):
 
     def set_eval():
         netG.eval()
-
-    # for fine tuning 
-    # load_netG_checkpoint_path = 'checkpoints/cluster_fullbody_center_1025_img.hg.group.4.2.256_wbg1_s3.20_train_latest'
-    # print('Loading netG from ', load_netG_checkpoint_path)
-    # state_dict_netG = torch.load(load_netG_checkpoint_path) 
-    # opt_netG = state_dict_netG['opt']
-    # netGG = HGHPIFuNet(opt_netG, projection_mode)
-    # netGG.load_state_dict(state_dict_netG['model_state_dict'])
-    # netG.loadFromHGHPIFu(netGG)
 
     # load checkpoints        
     if state_dict is not None:
@@ -395,10 +334,6 @@ def train(opt):
             calib_tensor = train_data['calib'].to(device=cuda)
             sample_tensor = train_data['samples'].to(device=cuda)
             gamma_tensor = train_data['ratio'].float().to(device=cuda)
-            image_tensor, calib_tensor = reshape_multiview_tensors(image_tensor, calib_tensor)
-
-            if opt.num_views > 1:
-                sample_tensor = reshape_sample_tensor(sample_tensor, opt.num_views)
 
             label_tensor = train_data['labels'].to(device=cuda)
             if opt.num_sample_normal:
@@ -440,7 +375,6 @@ def train(opt):
                 losses['Err(total)'] = err.item()
                 for k, v in errG.items():
                     losses[k] = v.item()
-                vis.plot_current_losses(epoch, counter_ratio, losses)
                 for k, v in losses.items():
                     writer.add_scalar('%s/train-runtime' % k, v, cur_iter)
 
@@ -467,7 +401,6 @@ def train(opt):
                         for k, v in err.items():
                             writer.add_scalar('%s/%s' % (k.split('-')[0],'test'), v, cur_iter)
 
-                        vis.plot_current_test_losses(epoch, 0, test_losses)
                         set_train()
                     print('saving checkpoints')
                     save_dict = {
@@ -504,11 +437,6 @@ def train(opt):
                             opt.results_path, opt.name, epoch, test_data['name'], test_data['vid'], test_data['pid'])
                         gen_mesh(opt.resolution, netG if not multi_gpu else netG.module, cuda, test_data, save_path, ls_thresh)
                     set_train()
-                
-            # if train_idx % opt.freq_save_image == 0:
-            #     visuals = {}
-            #     visuals['input'] = image_tensor
-            #     vis.display_current_results(epoch, visuals)
 
             iter_data_time = time.time()
             cur_iter += 1    

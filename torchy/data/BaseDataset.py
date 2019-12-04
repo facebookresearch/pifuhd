@@ -31,10 +31,10 @@ class BaseDataset(Dataset):
                 'samples': None, # [3, N] 3d points
                 'labels': None, # [1, N] labels
 
-                'img': None, # [num_views, C, H, W] input images
-                'calib': None, # [num_views, 4, 4] calibration matrix
-                'extrinsic': None, # [num_views, 4, 4] extrinsic matrix
-                'mask': None, # [num_views, 1, H, W] segmentation masks
+                'img': None, # [1, C, H, W] input images
+                'calib': None, # [1, 4, 4] calibration matrix
+                'extrinsic': None, # [1, 4, 4] extrinsic matrix
+                'mask': None, # [1, 1, H, W] segmentation masks
             }
             return res
         except Exception as e:

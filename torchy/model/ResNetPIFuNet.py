@@ -20,23 +20,17 @@ class ResNetPIFuNet(BasePIFuNet):
         self.name = 'resnet_pifu'
 
         self.opt = opt
-        self.num_views = self.opt.num_views
 
         self.image_filter = ResNet('resnet34')
 
         self.mlp = MLP(
             filter_channels=self.opt.mlp_dim,
             merge_layer=-1,
-            num_views=1,
             res_layers=self.opt.mlp_res_layers,
             norm=self.opt.mlp_norm,
-            last_op=nn.Sigmoid(),
-            compose=False)
+            last_op=nn.Sigmoid())
 
-        if self.opt.sp_enc_type == 'z':
-            self.spatial_enc = DepthNormalizer(opt)
-        else:
-            raise NameError('unknown spatial encoding type')
+        self.spatial_enc = DepthNormalizer(opt)
 
         # This is a list of [B x Feat_i x H x W] features
         self.im_feat_list = []
@@ -114,14 +108,10 @@ class ResNetPIFuNet(BasePIFuNet):
 
         sp_feat = self.spatial_enc(xyz, calibs=calibs)
 
-        if self.opt.sp_enc_type == 'vol_enc' and self.opt.sp_no_pifu:
-            point_local_feat = sp_feat
-        else:
-            # This is a list of [B, Feat_i, N] features
-            point_local_feat_list = [self.index(im_feat, xy) for im_feat in self.im_feat_list]
-            # point_local_feat_list.append(self.global_feat.expand(-1,-1,sp_feat.size(2)))
+        # This is a list of [B, Feat_i, N] features
+        point_local_feat_list = [self.index(im_feat, xy) for im_feat in self.im_feat_list]
 
-            point_local_feat = torch.cat(point_local_feat_list + [sp_feat], 1)
+        point_local_feat = torch.cat(point_local_feat_list + [sp_feat], 1)
 
         pred = self.mlp(point_local_feat)[0]
 
@@ -146,9 +136,6 @@ class ResNetPIFuNet(BasePIFuNet):
 
         if self.nmls is not None and self.labels_nml is not None:
             error['Err(nml)'] = self.criteria['nml'](self.nmls, self.labels_nml)
-        
-        if self.mlp.y_nways is not None and self.opt.lambda_cmp_l1 != 0.0:
-            error['Err(L1)'] = self.mlp.y_nways.abs().sum(1).mean()
 
         return error
 

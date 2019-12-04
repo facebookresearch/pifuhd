@@ -6,7 +6,6 @@ from .BasePIFuNet import BasePIFuNet
 from .MLP import MLP
 from .DepthNormalizer import DepthNormalizer
 from .HGFilters import *
-from .VolumetricEncoder import *
 from ..net_util import init_net
 
 class HGPIFuNet(BasePIFuNet):
@@ -26,25 +25,17 @@ class HGPIFuNet(BasePIFuNet):
         self.name = 'hg_pifu'
 
         self.opt = opt
-        self.num_views = self.opt.num_views
         self.image_filter = HGFilter(opt.num_stack, opt.hg_depth, 3, opt.hg_dim, 
                                      opt.norm, opt.hg_down, False)
 
         self.mlp = MLP(
             filter_channels=self.opt.mlp_dim,
             merge_layer=self.opt.merge_layer,
-            num_views=self.num_views,
             res_layers=self.opt.mlp_res_layers,
             norm=self.opt.mlp_norm,
-            last_op=nn.Sigmoid(),
-            compose=self.opt.use_compose)
+            last_op=nn.Sigmoid())
 
-        if self.opt.sp_enc_type == 'vol':
-            self.spatial_enc = VolumetricEncoder(opt)
-        elif self.opt.sp_enc_type == 'z':
-            self.spatial_enc = DepthNormalizer(opt)
-        else:
-            raise NameError('unknown spatial encoding type')
+        self.spatial_enc = DepthNormalizer(opt)
 
         self.im_feat_list = []
         self.tmpx = None
@@ -101,9 +92,6 @@ class HGPIFuNet(BasePIFuNet):
         args:
             images: [B, C, H, W]
         '''
-        if self.opt.sp_enc_type == 'vol':
-            self.spatial_enc.filter(images)
-
         self.im_feat_list, self.normx = self.image_filter(images)
         if not self.training:
             self.im_feat_list = [self.im_feat_list[-1]]
@@ -133,34 +121,15 @@ class HGPIFuNet(BasePIFuNet):
         if labels is not None:
             self.labels = in_bb * labels
 
-        #     for i in range(xyz.size(0)):
-        #         p = xyz[i].detach().cpu().numpy().T
-        #         v = labels[i].detach().cpu().numpy().T
-
-        #         cin = np.ones_like(p[v[:,0] > 0.5])
-        #         cin[:,1:] = 0.0
-        #         save_points_color('%04d_in.obj' % i, p[v[:,0] > 0.5], cin)
-        #         cin = np.ones_like(p[v[:,0] <= 0.5])
-        #         cin[:,:2] = 0.0
-        #         save_points_color('%04d_out.obj' % i, p[v[:,0] <= 0.5], cin)
-
-        # exit()
-
         sp_feat = self.spatial_enc(xyz, calibs=calibs)
 
         intermediate_preds_list = []
 
         phi = None
         for i, im_feat in enumerate(self.im_feat_list):
+            point_local_feat_list = [self.index(im_feat, xy), sp_feat]       
+            point_local_feat = torch.cat(point_local_feat_list, 1)
 
-            if self.opt.sp_enc_type == 'vol' and self.opt.sp_no_pifu:
-                point_local_feat = sp_feat
-            # elif self.opt.imfeat_norm: # experimental
-            #     point_local_feat_list = [F.normalize(self.index(im_feat, xy),dim=1,eps=1e-8), sp_feat]            
-            #     point_local_feat = torch.cat(point_local_feat_list, 1)
-            else:
-                point_local_feat_list = [self.index(im_feat, xy), sp_feat]       
-                point_local_feat = torch.cat(point_local_feat_list, 1)
             pred, phi = self.mlp(point_local_feat)
             pred = in_bb * pred
 
@@ -203,11 +172,9 @@ class HGPIFuNet(BasePIFuNet):
         im_feat = self.im_feat_list[-1]
         sp_feat = self.spatial_enc(xyz, calibs=calibs)
 
-        if self.opt.sp_enc_type == 'vol_enc' and self.opt.sp_no_pifu:
-            point_local_feat = sp_feat
-        else:
-            point_local_feat_list = [self.index(im_feat, xy), sp_feat]            
-            point_local_feat = torch.cat(point_local_feat_list, 1)
+        point_local_feat_list = [self.index(im_feat, xy), sp_feat]            
+        point_local_feat = torch.cat(point_local_feat_list, 1)
+
         pred = self.mlp(point_local_feat)[0]
 
         pred = pred.view(*pred.size()[:2],-1,4) # (B, 1, N, 4)
@@ -221,59 +188,6 @@ class HGPIFuNet(BasePIFuNet):
         nml = F.normalize(nml, dim=1, eps=1e-8)
 
         self.nmls = nml
-
-    # bilinear sampling doesn't support gradient backprop
-    # def calc_normal(self, points, calibs, transforms=None, labels=None):
-    #     '''
-    #     return surface normal in 'model' space.
-    #     it computes normal only in the last stack.
-    #     note that the current implementation use forward difference.
-    #     args:
-    #         points: [B, 3, N] 3d points in world space
-    #         calibs: [B, 3, 4] calibration matrices for each image
-    #         transforms: [B, 2, 3] image space coordinate transforms
-    #         delta: perturbation for finite difference
-    #         fd_type: finite difference type (forward/backward/central) 
-    #     '''
-    #     if labels is not None:
-    #         self.labels_nml = labels
-
-    #     points.requires_grad = True
-    #     xyz = self.projection(points, calibs, transforms)
-    #     xy = xyz[:, :2, :]
-
-    #     im_feat = self.im_feat_list[-1]
-    #     sp_feat = self.spatial_enc(xyz, calibs=calibs)
-
-    #     if self.opt.sp_enc_type == 'vol' and self.opt.sp_no_pifu:
-    #         point_local_feat = sp_feat
-    #     else:
-    #         point_local_feat_list = [self.index(im_feat, xy), sp_feat]            
-    #         point_local_feat = torch.cat(point_local_feat_list, 1)
-            
-    #     pred = self.mlp(point_local_feat)
-
-    #     pred_sum = pred.sum()
-        
-    #     nml = -torch.autograd.grad(pred_sum, points, create_graph=True)[0]
-    #     nml = F.normalize(nml, dim=1, eps=1e-8)
-
-    #     self.nmls = nml
-
-    def calc_comp_ids(self, points, calibs, transforms=None):
-        '''
-            return the component id
-            NOTE: this is valid only for mlp with compose=True
-        '''
-        self.query(points, calibs)
-        self.get_preds()
-
-        nways = None
-        if self.mlp.y_nways is not None:
-            nways = self.mlp.y_nways.max(1)[1]
-
-        return nways
-
 
     def get_im_feat(self):
         '''
@@ -297,9 +211,6 @@ class HGPIFuNet(BasePIFuNet):
         if self.nmls is not None and self.labels_nml is not None:
             error['Err(nml)'] = self.criteria['nml'](self.nmls, self.labels_nml)
         
-        if self.mlp.y_nways is not None and self.opt.lambda_cmp_l1 != 0.0:
-            error['Err(L1)'] = self.mlp.y_nways.abs().sum(1).mean()
-
         return error
 
     def forward(self, images, points, calibs, labels, gamma, points_nml=None, labels_nml=None):

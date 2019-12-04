@@ -19,7 +19,6 @@ import matplotlib
 from numpy.linalg import inv
 
 from lib.options import BaseOptions
-from lib.visualizer import Visualizer
 from lib.mesh_util import *
 from lib.sample_util import *
 from torchy.data import *
@@ -30,62 +29,6 @@ from PIL import Image
 import torchvision.transforms as transforms
 
 parser = BaseOptions()
-
-def label_to_color(nways, N=10):
-    '''
-    args:
-        nwaysL [N] integer numpy array
-    return:
-        [N, 3] color numpy array
-    '''
-    mapper = cm.ScalarMappable(norm=matplotlib.colors.Normalize(vmin=0, vmax=N), cmap=plt.get_cmap('tab10'))
-
-    colors = []
-    for v in nways.tolist():
-        colors.append(mapper.to_rgba(float(v)))
-
-    return np.stack(colors, 0)[:,:3]
-
-def reshape_multiview_tensors(image_tensor, calib_tensor):
-    '''
-    args:
-        image_tensor: [B, nV, C, H, W]
-        calib_tensor: [B, nV, 3, 4]
-    return:
-        image_tensor: [B*nV, C, H, W]
-        calib_tensor: [B*nV, 3, 4]
-    '''
-    image_tensor = image_tensor.view(
-        image_tensor.shape[0] * image_tensor.shape[1],
-        image_tensor.shape[2],
-        image_tensor.shape[3],
-        image_tensor.shape[4]
-    )
-    calib_tensor = calib_tensor.view(
-        calib_tensor.shape[0] * calib_tensor.shape[1],
-        calib_tensor.shape[2],
-        calib_tensor.shape[3]
-    )
-
-    return image_tensor, calib_tensor
-
-def reshape_sample_tensor(sample_tensor, num_views):
-    '''
-    args:
-        sample_tensor: [B, 3, N] xyz coordinates
-        num_views: number of views
-    return:
-        [B*nV, 3, N] repeated xyz coordinates
-    '''
-    if num_views == 1:
-        return sample_tensor
-    sample_tensor = sample_tensor[:, None].repeat(1, num_views, 1, 1)
-    sample_tensor = sample_tensor.view(
-        sample_tensor.shape[0] * sample_tensor.shape[1],
-        sample_tensor.shape[2],
-        sample_tensor.shape[3]
-    )
-    return sample_tensor
 
 def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True, components=False):
     image_tensor_global = data['img_512'].to(device=cuda)
@@ -173,12 +116,8 @@ def recon(opt):
 
     if 'hg_ablation' in opt.netG:
         netMR = HGPIFuMRNetAblation(opt, projection_mode)
-    elif 'resblk_ablation' in opt.netG:
-        netMR = ResBlkPIFuMRNetAblation(opt, projection_mode)
     elif 'hg' in opt.netG:
-        netMR = HGPIFuMRNetV2(opt, netG, projection_mode)
-    elif 'resblk' in opt.netG:
-        netMR = ResBlkPIFuMRNet(opt, netG, projection_mode)
+        netMR = HGPIFuMRNet(opt, netG, projection_mode)
 
     netMR = netMR.to(device=cuda)
 

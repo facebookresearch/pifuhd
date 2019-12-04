@@ -17,56 +17,14 @@ from torch.utils.tensorboard import SummaryWriter
 import copy
 
 from lib.options import BaseOptions
-from lib.visualizer import Visualizer
 from lib.mesh_util import *
 from lib.sample_util import *
 from torchy.data import *
 from torchy.model import *
 from torchy.geometry import index
-from torchy.net_util import CustomBCELoss, CustomMSELoss
+from torchy.net_util import CustomBCELoss, CustomMSELoss, load_state_dict
 
 parser = BaseOptions()
-
-def reshape_multiview_tensors(image_tensor, calib_tensor):
-    '''
-    args:
-        image_tensor: [B, nV, C, H, W]
-        calib_tensor: [B, nV, 3, 4]
-    return:
-        image_tensor: [B*nV, C, H, W]
-        calib_tensor: [B*nV, 3, 4]
-    '''
-    image_tensor = image_tensor.view(
-        image_tensor.shape[0] * image_tensor.shape[1],
-        image_tensor.shape[2],
-        image_tensor.shape[3],
-        image_tensor.shape[4]
-    )
-    calib_tensor = calib_tensor.view(
-        calib_tensor.shape[0] * calib_tensor.shape[1],
-        calib_tensor.shape[2],
-        calib_tensor.shape[3]
-    )
-
-    return image_tensor, calib_tensor
-
-def reshape_sample_tensor(sample_tensor, num_views):
-    '''
-    args:
-        sample_tensor: [B, 3, N] xyz coordinates
-        num_views: number of views
-    return:
-        [B*nV, 3, N] repeated xyz coordinates
-    '''
-    if num_views == 1:
-        return sample_tensor
-    sample_tensor = sample_tensor[:, None].repeat(1, num_views, 1, 1)
-    sample_tensor = sample_tensor.view(
-        sample_tensor.shape[0] * sample_tensor.shape[1],
-        sample_tensor.shape[2],
-        sample_tensor.shape[3]
-    )
-    return sample_tensor
 
 def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True):
     image_g_tensor = data['img_global'].to(device=cuda)[None]
@@ -76,6 +34,14 @@ def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True):
     
     net.filter_global(image_g_tensor)
     net.filter_local(image_l_tensor)
+
+    try:
+        if net.netG.netF is not None:
+            image_tensor = torch.cat([image_g_tensor, net.netG.nmlF], 0)
+        if net.netG.netB is not None:
+            image_tensor = torch.cat([image_g_tensor, net.netG.nmlB], 0)
+    except:
+        pass
 
     b_min = data['b_min']
     b_max = data['b_max']
@@ -167,10 +133,9 @@ def calc_error(opt, net, cuda, dataset, num_tests, label=None, thresh=0.5):
             image_l_tensor = data['img_local'].to(device=cuda).unsqueeze(0)
             calib_l_tensor = data['calib_local'].to(device=cuda).unsqueeze(0)
             sample_tensor = data['samples'].to(device=cuda).unsqueeze(0)
-            gamma_tensor = torch.Tensor([data['ratio']]).float().to(device=cuda).unsqueeze(0)
             label_tensor = data['labels'].to(device=cuda).unsqueeze(0)
 
-            errG, res = net(image_l_tensor, image_g_tensor, sample_tensor, calib_l_tensor, calib_g_tensor, label_tensor, gamma_tensor)
+            errG, res = net(image_l_tensor, image_g_tensor, sample_tensor, calib_l_tensor, calib_g_tensor, label_tensor)
 
             err = total_error(opt, errG, False)
 
@@ -233,8 +198,12 @@ def train(opt):
         if not opt.finetune and 'opt' in state_dict:
             print('Warning: opt is overwritten.')
             continue_train = opt.continue_train
+            loadSizeLocal = opt.loadSizeLocal
+            num_local = opt.num_local
             opt = state_dict['opt']
             opt.continue_train = continue_train
+            opt.loadSizeLocal = loadSizeLocal
+            opt.num_local = num_local
     elif state_dict_path is not None:
         print('Error: unable to load checkpoint %s' % state_dict_path)
 
@@ -281,21 +250,24 @@ def train(opt):
         state_dict_netG = torch.load(opt.load_netG_checkpoint_path) 
         opt_netG = state_dict_netG['opt']
         opt_netG.merge_layer = opt.merge_layer
-        criteria_netG = copy.deepcopy(criteria)
-        criteria_netG.pop('nml', None)
-        if opt_netG.netG == 'hghpifu':
-            netG = HGHPIFuNet(opt_netG, projection_mode, criteria_netG)
-        else:
-            netG = HGPIFuNet(opt_netG, projection_mode, criteria_netG)
-
-        if 'model_state_dict' in state_dict_netG:
+        try:
+            if opt_netG.use_front_normal or opt_netG.use_back_normal:
+                netG = HGPIFuNetwNML(opt_netG, projection_mode)
             netG.load_state_dict(state_dict_netG['model_state_dict'])
-        else: # this is deprecated but keep it for now.
-            netG.load_state_dict(state_dict_netG)
-    else:
-        raise IOError('Warning: netG is initialized!!')
-    
-    netMR = HGPIFuMRNet(opt, netG, projection_mode, criteria)
+        except:
+            tmpG = HGPIFuNet(opt_netG, projection_mode)
+            tmpG = load_state_dict(state_dict_netG['model_state_dict'], tmpG)
+            print('loading from other network')
+            netG = HGPIFuNetwNML(opt_netG, projection_mode)
+            netG.loadFromHGHPIFu(tmpG)
+            # netG = tmpG
+        del state_dict_netG
+
+    if 'hg_ablation' in opt.netG:
+        netMR = HGPIFuMRNetAblation(opt, projection_mode, criteria)
+    elif 'hg' in opt.netG:
+        netMR = HGPIFuMRNet(opt, netG, projection_mode, criteria)
+
     lr = opt.learning_rate
     
     def set_train():
@@ -315,9 +287,9 @@ def train(opt):
             opt.resume_epoch = state_dict['epoch']
         if opt.resume_epoch < 0 or opt.finetune:
             opt.resume_epoch = 0
- 
-    netMR = netMR.to(device=cuda)
     
+    netMR = netMR.to(device=cuda)
+
     multi_gpu = False
     if torch.cuda.device_count() > 1:
         print("Let's use", torch.cuda.device_count(), "GPUs!")
@@ -343,6 +315,8 @@ def train(opt):
     cur_iter = state_dict['cur_iter'] if not opt.finetune and state_dict is not None and 'cur_iter' in state_dict \
                 else start_epoch * len(train_data_loader)
 
+    del state_dict
+
     for epoch in range(start_epoch, num_epoch):
         epoch_start_time = time.time()
 
@@ -354,8 +328,8 @@ def train(opt):
             image_l_tensor = train_data['img_local'].to(device=cuda)
             calib_l_tensor = train_data['calib_local'].to(device=cuda)
             sample_tensor = train_data['samples'].to(device=cuda)
-            gamma_tensor = train_data['ratio'].float().to(device=cuda)
             label_tensor = train_data['labels'].to(device=cuda)
+            rect_tensor = train_data['rect']
 
             if opt.num_sample_normal:
                 sample_nml_tensor = train_data['samples_nml'].to(device=cuda)
@@ -368,7 +342,7 @@ def train(opt):
 
             errMR, res = netMR(image_l_tensor, image_g_tensor, sample_tensor, \
                                calib_l_tensor, calib_g_tensor, label_tensor, \
-                               gamma_tensor, sample_nml_tensor, label_nml_tensor)
+                               sample_nml_tensor, label_nml_tensor, rect_tensor)
             err = total_error(opt, errMR, multi_gpu)
 
             optimizer.zero_grad()
@@ -381,8 +355,8 @@ def train(opt):
 
             if train_idx % opt.freq_save_ply == 0 and train_idx != 0:
                 save_path = '%s/%s/test_epoch%d_idx%d.ply' % (opt.results_path, opt.name, epoch, train_idx)
-                r = res[0].cpu()
-                points = sample_tensor[0].transpose(0, 1).cpu()
+                r = res[0,0].cpu()
+                points = sample_tensor[0,0].transpose(0, 1).cpu()
                 save_samples_truncted_prob(save_path, points.detach().numpy(), r.detach().numpy())
   
             if train_idx % opt.freq_plot == 0:
@@ -460,6 +434,7 @@ def train(opt):
                 
             iter_data_time = time.time()
             cur_iter += 1
+            lr = adjust_learning_rate(optimizer, cur_iter, lr, opt.schedule, opt.gamma)
 
 def trainerWrapper(args=None):
     opt = parser.parse(args)

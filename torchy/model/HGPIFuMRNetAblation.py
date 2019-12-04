@@ -6,7 +6,6 @@ from .BasePIFuNet import BasePIFuNet
 from .MLP import MLP
 from .DepthNormalizer import DepthNormalizer
 from .HGFilters import *
-from .VolumetricEncoder import *
 from ..net_util import init_net
 from torchvision import models
 import cv2
@@ -30,23 +29,17 @@ class HGPIFuMRNetAblation(BasePIFuNet):
         in_ch = 3
 
         self.opt = opt
-        self.num_views = self.opt.num_views
         self.image_filter = HGFilter(opt.num_stack, opt.hg_depth, in_ch, opt.hg_dim, 
                                      opt.norm, 'no_down', False)
 
         self.mlp = MLP(
             filter_channels=self.opt.mlp_dim,
             merge_layer=-1,
-            num_views=1,
             res_layers=self.opt.mlp_res_layers,
             norm=self.opt.mlp_norm,
-            last_op=nn.Sigmoid(),
-            compose=False)
+            last_op=nn.Sigmoid())
 
-        if self.opt.sp_enc_type == 'z':
-            self.spatial_enc = DepthNormalizer(opt)
-        else:
-            raise NameError('unknown spatial encoding type')
+        self.spatial_enc = DepthNormalizer(opt)
 
         self.im_feat_list = []
         self.preds_interm = None

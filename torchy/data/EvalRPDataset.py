@@ -247,32 +247,3 @@ class EvalRPDataset(Dataset):
 
     def __getitem__(self, index):
         return self.get_item(index)
-
-def test(is_train=True):
-
-    max_yaw_angle = 10
-    max_pitch_angle = 5
-    interval_yaw = 2
-    interval_pitch = 5
-    yaw_size = max_yaw_angle
-    intv_yaw = interval_yaw
-    pitch_size = 2 * max_pitch_angle + 1
-    intv_pitch = interval_pitch
-
-    yaw_val = yaw_size - yaw_size // intv_yaw if is_train else yaw_size // intv_yaw
-    pitch_val = pitch_size - pitch_size // intv_pitch - 1 if is_train else pitch_size // intv_pitch + 1
-        
-    for tmp in range(0, yaw_val * pitch_val):
-        if is_train:
-            vid = tmp % yaw_val
-            pid = tmp // yaw_val
-            vid = intv_yaw * (vid // (intv_yaw - 1)) + vid % (intv_yaw - 1) + 1
-            pid = intv_pitch * (pid // (intv_pitch- 1)) + pid % (intv_pitch - 1) + 1 - max_pitch_angle
-        else:
-            vid = tmp % yaw_val
-            pid = tmp // yaw_val
-            vid = intv_yaw * vid
-            pid = intv_pitch * pid - max_pitch_angle
-
-if __name__ in '__main__':
-    test(True)

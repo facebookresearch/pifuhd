@@ -12,8 +12,6 @@ class BaseOptions():
         g_data.add_argument('--dataset', type=str, default='renderppl', help='dataset name')
         g_data.add_argument('--dataroot', type=str, default='./data',
                             help='path to images (data folder)')
-        g_data.add_argument('--dataroot_mix', type=str, default='./data',
-                            help='path to images (data folder)')
 
         g_data.add_argument('--loadSize', type=int, default=512, help='load size of input image')
 
@@ -23,12 +21,6 @@ class BaseOptions():
                            help='name of the experiment. It decides where to store samples and models')
         g_exp.add_argument('--debug', action='store_true', help='debug mode or not')
         g_exp.add_argument('--mode', type=str, default='inout', help='inout || color')
-        g_exp.add_argument('--use_tsdf', action='store_true', help='use tsdf instead of occupancy')
-        g_exp.add_argument('--use_mix', action='store_true', help='use mix dataset')
-        g_exp.add_argument('--mix_ratio', type=float, default=0.5, help='mix ratio of two datasets')
-
-        g_exp.add_argument('--num_views', type=int, default=1, help='How many views to use for multiview network.')
-        g_exp.add_argument('--random_multiview', action='store_true', help='Select random multiview combination.')
 
         # Training related
         g_train = parser.add_argument_group('Training')
@@ -38,8 +30,6 @@ class BaseOptions():
         g_train.add_argument('--serial_batches', action='store_true',
                              help='if true, takes images in order to make batches, otherwise takes them randomly')
         g_train.add_argument('--pin_memory', action='store_true', help='pin_memory')
-        g_train.add_argument('--display_port', type=int, default=-1, help='port of visdom')
-        g_train.add_argument('--display_id', type=int, default=0, help='port of visdom')
         g_train.add_argument('--learning_rate', type=float, default=1e-3, help='adam learning rate')
         g_train.add_argument('--num_iter', type=int, default=30000, help='num iterations to train')
         g_train.add_argument('--freq_plot', type=int, default=100, help='freqency of the error plot')
@@ -90,33 +80,20 @@ class BaseOptions():
         g_model.add_argument('--netC', type=str, default='resblkpifu', help='resblkpifu | resblkhpifu')
 
         # hgimp specific
-        g_model.add_argument('--n_pixshuffle', type=int, default=1, help='pixel shuffle')
-        g_model.add_argument('--hg_use_attention', action='store_true', help='use self attention')
         g_model.add_argument('--num_stack', type=int, default=4, help='# of hourglass')
         g_model.add_argument('--hg_depth', type=int, default=2, help='# of stacked layer of hourglass')
         g_model.add_argument('--hg_down', type=str, default='ave_pool', help='ave pool || conv64 || conv128')
         g_model.add_argument('--hg_dim', type=int, default=256, help='256 | 512')
 
-        # volumetric encoder
-        g_model.add_argument('--sp_no_pifu', action='store_true', help='cut fcn feature for debug')
-        g_model.add_argument('--sp_enc_type', type=str, default='z', help='spatial encoding [ z | vol ]')
-        g_model.add_argument('--vol_net', type=str, default='unet', help='[ unet | hg ]')
-        g_model.add_argument('--vol_norm', type=str, default='batch', help='normalization for volume branch')
-        g_model.add_argument('--vol_ch_in', type=int, default=16, help='channel size for volume branch')
-        g_model.add_argument('--vol_ch_out', type=int, default=16, help='channel size for volume branch')
-        g_model.add_argument('--vol_hg_depth', type=int, default=2, help='depth of hourglass in volume branch')
-
         # Classification General
-        g_model.add_argument('--imfeat_norm', action='store_true', help='image feature normalization')
         g_model.add_argument('--mlp_norm', type=str, default='group', help='normalization for volume branch')
-        g_model.add_argument('--mlp_dim', nargs='+', default=[1024, 512, 256, 128, 1], type=int,
+        g_model.add_argument('--mlp_dim', nargs='+', default=[257, 1024, 512, 256, 128, 1], type=int,
                              help='# of dimensions of mlp. no need to put the first channel')
         g_model.add_argument('--mlp_dim_color', nargs='+', default=[1024, 512, 256, 128, 3], type=int,
                              help='# of dimensions of mlp. no need to put the first channel')
         g_model.add_argument('--mlp_res_layers', nargs='+', default=[2,3,4], type=int,
                              help='leyers that has skip connection. use 0 for no residual pass')
         g_model.add_argument('--merge_layer', type=int, default=-1)
-        g_model.add_argument('--use_compose', action='store_true', help='use multi part composition')
 
         # for train
         parser.add_argument('--random_body_chop', action='store_true', help='if random flip')
@@ -162,8 +139,8 @@ class BaseOptions():
         parser.add_argument('--load_netMR_checkpoint_path', type=str, help='path to save checkpoints')
         parser.add_argument('--loadSizeBig', type=int, default=1024, help='load size of input image')
         parser.add_argument('--loadSizeLocal', type=int, default=512, help='load size of input image')
-        parser.add_argument('--train_full_pifu', action='store_true')
-        parser.add_argument('--num_local', type=int, default=1)
+        parser.add_argument('--train_full_pifu', action='store_true', help='enable end-to-end training')
+        parser.add_argument('--num_local', type=int, default=1, help='number of local cropping')
 
         # for normal condition
         parser.add_argument('--load_netFB_checkpoint_path', type=str, help='path to save checkpoints')
@@ -173,10 +150,6 @@ class BaseOptions():
         parser.add_argument('--use_front_normal', action='store_true')
         parser.add_argument('--use_back_normal', action='store_true')
         parser.add_argument('--no_intermediate_loss', action='store_true')
-
-        parser.add_argument('--debug_crop', action='store_true')
-
-        parser.add_argument('--tmp_id', type=int, default=0, help='256 | 512')
 
         # aug
         group_aug = parser.add_argument_group('aug')
@@ -230,30 +203,7 @@ class BaseOptions():
         if len(opt.mlp_res_layers) == 1 and opt.mlp_res_layers[0] < 1:
             opt.mlp_res_layers = []
         
-        # if opt.sp_enc_type == 'vol':
-        #     opt.name = '%s_img.hg.%s.%d.%d.%d_vol.%s.%s.%d-%d_wbg%d_s%1.f.%1.f' % \
-        #         (opt.name, opt.norm, opt.num_stack, opt.hg_depth, opt.hg_dim, \
-        #         opt.vol_net, opt.vol_norm, opt.vol_ch_in, opt.vol_ch_out, int(opt.random_bg), opt.sigma_min, opt.sigma_max)
-        #     opt.mlp_dim = [opt.vol_ch_out if opt.sp_no_pifu else opt.vol_ch_out + opt.hg_dim] + opt.mlp_dim
-        # else:
-        #     opt.name = '%s_img.hg.%s.%d.%d.%d_wbg%d_s%1.f.%1.f' % \
-        #         (opt.name, opt.norm, opt.num_stack, opt.hg_depth, opt.hg_dim, \
-        #          int(opt.random_bg), opt.sigma_min, opt.sigma_max)
-        if 'resnet' not in opt.name and 'mr' not in opt.name:
-            opt.mlp_dim = [opt.hg_dim + 1] + opt.mlp_dim
-        
-
-        if opt.netC == 'resblkhpifu':
-            opt.mlp_dim_color = [256 + opt.mlp_dim[opt.merge_layer+1]] + opt.mlp_dim_color
-            print(opt.mlp_dim_color)
-        else:
-            opt.mlp_dim_color = [256 + opt.hg_dim + 1] + opt.mlp_dim_color
-        # deprecated(09/25)
-        # if opt.sp_enc_type == 'vol':
-        #     opt.name = '%s_p%d.%d_%s%d_np%d_s%1.f.%1.f' % (opt.name, opt.mean_pitch, opt.max_pitch, opt.vol_net, opt.vol_ch, int(opt.sp_no_pifu), opt.sigma_min, opt.sigma_max)
-        #     opt.mlp_dim = [opt.vol_ch if opt.sp_no_pifu else opt.vol_ch + opt.hg_dim] + opt.mlp_dim
-        # else:
-        #     opt.name = '%s_p%d.%d' % (opt.name, opt.mean_pitch, opt.max_pitch)
+        # if 'resnet' not in opt.name and 'mr' not in opt.name:
         #     opt.mlp_dim = [opt.hg_dim + 1] + opt.mlp_dim
-
+        
         return opt

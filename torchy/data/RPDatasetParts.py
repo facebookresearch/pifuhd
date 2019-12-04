@@ -87,9 +87,6 @@ def face_crop(pts):
         center = ps.mean(0)
     radius = int(1.4*np.max(np.sqrt(((ps - center[None,:])**2).reshape(-1,2).sum(0))))
 
-
-    # radius = np.max(np.sqrt(((center[None] - np.stack([]))**2).sum(0))
-    # radius = int(1.0*abs(center[1] - mshoulder[1]))
     center = center.astype(np.int)
 
     x1 = center[0] - radius
@@ -133,33 +130,6 @@ def upperbody_crop(pts):
 
     return (x1, y1, x2-x1, y2-y1)
 
-# def upperbody_crop(pts):
-#     mshoulder = pts[1,:2]
-#     nflag = pts[0,2] > 0.2
-#     lflag = pts[17,2] > 0.2
-#     rflag = pts[18,2] > 0.2
-
-#     rear = pts[18,:2]
-#     lear = pts[17,:2]
-#     top = pts[0,:2]
-#     if not nflag and lflag and rflag:
-#         top = 0.5 * (rear + lear)
-#     elif lflag:
-#         top = lear
-#     elif rflag:
-#         top = rear
-
-
-#     center = mshoulder
-#     radius = int(2.5*np.sqrt(((center - top)**2).sum(0)))
-#     center = center.astype(np.int)
-
-#     x1 = center[0] - radius
-#     x2 = center[0] + radius
-#     y1 = center[1] - radius
-#     y2 = center[1] + radius
-
-#     return (x1, y1, x2-x1, y2-y1)
 
 def fullbody_crop(pts):
     pts = pts[pts[:,2] > 0.2]
@@ -190,7 +160,7 @@ class RPDatasetParts(Dataset):
 
         self.root = self.opt.dataroot
 
-        self.PARAM_WB = os.path.join(self.root, '../hf_human_big', 'PARAM')
+        self.PARAM_WB = os.path.join(self.root, 'PARAM_WB')
 
         self.RENDER = os.path.join(self.root, 'RENDER')
         self.MASK = os.path.join(self.root, 'MASK')
@@ -209,8 +179,6 @@ class RPDatasetParts(Dataset):
         
         self.B_MIN = np.array([-128, -28, -128])
         self.B_MAX = np.array([128, 228, 128])
-        # self.B_MIN = np.array([-120, -20, -64])
-        # self.B_MAX = np.array([120, 220, 64])
 
         try:
             file = open(os.path.join(self.root,'info.txt'),'r')
@@ -230,8 +198,6 @@ class RPDatasetParts(Dataset):
         self.bg_list = [f for f in os.listdir(self.BG) if '.jpg' in f]
 
         self.load_size = self.opt.loadSize
-
-        self.num_views = self.opt.num_views
 
         self.num_sample_surface = self.opt.num_sample_surface
         self.num_sample_inout = self.opt.num_sample_inout
@@ -288,233 +254,208 @@ class RPDatasetParts(Dataset):
     def __len__(self):
         return len(self.subjects) * len(self.yaw_list) * len(self.pitch_list)
 
-    def get_render(self, sid, num_views, pid=0, view_id=None, random_sample=False):
+    def get_render(self, sid, pid=0, view_id=0):
         '''
         Return render data
         args:
             subject: subject name
-            num_views: number of views
             pitch: pitch angle (default: 0)
             view_id: the first view id. if None, select randomly
         return:
-            'img': None, # [num_views, C, H, W] input images
-            'calib': None, # [num_views, 4, 4] calibration matrix
-            'extrinsic': None, # [num_views, 4, 4] extrinsic matrix
-            'mask': None, # [num_views, 1, H, W] segmentation masks
+            'img': None, # [C, H, W] input images
+            'calib': None, # [4, 4] calibration matrix
+            'extrinsic': None, # [4, 4] extrinsic matrix
+            'mask': None, # [1, H, W] segmentation masks
         '''
         subject = self.subjects[sid]
-        if view_id is None:
-            view_id = random.choice(self.yaw_list)
-        # views are sampled evenly unless random_sample is enabled
-        view_ids = [self.yaw_list[(view_id + len(self.yaw_list) // num_views * offset) % len(self.yaw_list)]
-                    for offset in range(num_views)]
-        if random_sample:
-            view_ids = np.random.choices(self.yaw_list, num_views)
 
+        vid = self.yaw_list[view_id]
         pitch = self.pitch_list[pid]
 
         pose3d = self.poses[subject]
 
-        calib_list = []
-        render_list = []
-        mask_list = []
-        extrinsic_list = []
-        file_list = []
-        for vid in view_ids:
-            param_path = os.path.join(self.PARAM, subject, '%d_%d_%02d.npy' % (vid, pitch, 0))
-            render_path = os.path.join(self.RENDER, subject, '%d_%d_%02d.png' % (vid, pitch, 0))
+        param_path = os.path.join(self.PARAM, subject, '%d_%d_%02d.npy' % (vid, pitch, 0))
+        render_path = os.path.join(self.RENDER, subject, '%d_%d_%02d.png' % (vid, pitch, 0))
 
-            with open(os.path.join(self.POSE2D, subject, '%d_%d_%02d_keypoints.json' % (vid, pitch, 0))) as json_file:
-                data = json.load(json_file)['people'][0]
-                keypoints = np.array(data['pose_keypoints_2d']).reshape(-1,3)
+        with open(os.path.join(self.POSE2D, subject, '%d_%d_%02d_keypoints.json' % (vid, pitch, 0))) as json_file:
+            data = json.load(json_file)['people'][0]
+            keypoints = np.array(data['pose_keypoints_2d']).reshape(-1,3)
+            flags = keypoints[:,2] > 0.5
 
-                flags = keypoints[:,2] > 0.5
+            nflag = flags[0]
+            mflag = flags[1]
 
-                nflag = flags[0]
-                mflag = flags[1]
-
-                check_id = [2, 5, 15, 16, 17, 18]
-                cnt = sum(flags[check_id])
-                if self.opt.crop_type == 'face' and (not (nflag and cnt > 3)):
-                    raise IOError('face should be front')
-                if self.opt.crop_type == 'upperbody' and (not (mflag and nflag and cnt > 3)):
-                    raise IOError('face should be front')
-                if self.opt.crop_type == 'fullbody' and sum(flags) < 15:
-                    raise IOError('sufficient keypoints are not detected')
-                
-
-            # load calibration data
-            param = np.load(param_path, allow_pickle=True)
-            # pixel unit / world unit
-            ortho_ratio = param.item().get('ortho_ratio')
-            # world unit / model unit
-            scale = param.item().get('scale')
-            # camera center world coordinate
-            center = param.item().get('center')
-            # model rotation
-            R = param.item().get('R')
-
-            translate = -np.matmul(R, center).reshape(3, 1)
-            extrinsic = np.concatenate([R, translate], axis=1)
-            extrinsic = np.concatenate([extrinsic, np.array([0, 0, 0, 1]).reshape(1, 4)], 0)
-            # make sure camera space matches with pixel coordinates [-loadSize//2, loadSize]
-            scale_intrinsic = np.identity(4)
-            scale_intrinsic[0, 0] = scale / ortho_ratio
-            scale_intrinsic[1, 1] = -scale / ortho_ratio # due to discripancy between OpenGL and CV
-            scale_intrinsic[2, 2] = scale / ortho_ratio
-
-            im = cv2.imread(render_path, cv2.IMREAD_UNCHANGED)
-            h, w = im.shape[:2]
-
-            # transformation from pixe space to normalized space [-1, 1]
-            ndc_intrinsic = np.identity(4)
-            scale_im2ndc = 1.0 / float(w // 2)
-            ndc_intrinsic[0, 0] = scale_im2ndc
-            ndc_intrinsic[1, 1] = scale_im2ndc
-            ndc_intrinsic[2, 2] = scale_im2ndc
+            check_id = [2, 5, 15, 16, 17, 18]
+            cnt = sum(flags[check_id])
+            if self.opt.crop_type == 'face' and (not (nflag and cnt > 3)):
+                raise IOError('face should be front')
+            if self.opt.crop_type == 'upperbody' and (not (mflag and nflag and cnt > 3)):
+                raise IOError('face should be front')
+            if self.opt.crop_type == 'fullbody' and sum(flags) < 15:
+                raise IOError('sufficient keypoints are not detected')
             
-            # transformation in normalized coordinates
-            trans_intrinsic = np.identity(4)
+        # load calibration data
+        param = np.load(param_path, allow_pickle=True)
+        # pixel unit / world unit
+        ortho_ratio = param.item().get('ortho_ratio')
+        # world unit / model unit
+        scale = param.item().get('scale')
+        # camera center world coordinate
+        center = param.item().get('center')
+        # model rotation
+        R = param.item().get('R')
 
-            intrinsic = np.matmul(scale_intrinsic, ndc_intrinsic)
+        translate = -np.matmul(R, center).reshape(3, 1)
+        extrinsic = np.concatenate([R, translate], axis=1)
+        extrinsic = np.concatenate([extrinsic, np.array([0, 0, 0, 1]).reshape(1, 4)], 0)
+        # make sure camera space matches with pixel coordinates [-loadSize//2, loadSize]
+        scale_intrinsic = np.identity(4)
+        scale_intrinsic[0, 0] = scale / ortho_ratio
+        scale_intrinsic[1, 1] = -scale / ortho_ratio # due to discripancy between OpenGL and CV
+        scale_intrinsic[2, 2] = scale / ortho_ratio
 
-            # for rendering with different resolution
+        im = cv2.imread(render_path, cv2.IMREAD_UNCHANGED)
+        h, w = im.shape[:2]
+
+        # transformation from pixe space to normalized space [-1, 1]
+        ndc_intrinsic = np.identity(4)
+        scale_im2ndc = 1.0 / float(w // 2)
+        ndc_intrinsic[0, 0] = scale_im2ndc
+        ndc_intrinsic[1, 1] = scale_im2ndc
+        ndc_intrinsic[2, 2] = scale_im2ndc
+        
+        # transformation in normalized coordinates
+        trans_intrinsic = np.identity(4)
+
+        intrinsic = np.matmul(scale_intrinsic, ndc_intrinsic)
+
+        # for rendering with different resolution
+        # please comment out this part if the correspoinding 2d joints are available
+        # currently I'm resuing detected 2d joints for images with different transformation
+        if True:
             param_wb_path = os.path.join(self.PARAM_WB, subject, '%d_%d_%02d.npy' % (vid, pitch, 0))
             param_wb = np.load(param_wb_path, allow_pickle=True)
-
-            # camera center world coordinate
             dp = np.matmul(R, (center - param_wb.item().get('center'))[:,None])[:,0]
             dp[0] *= -1.0
             s = scale / param_wb.item().get('scale')
             keypoints[:,:2] = s * (keypoints[:,:2] + param_wb.item().get('scale') * dp[None,:2] / ortho_ratio - 512) + 512
 
-            trans_mat = np.identity(4)
-            rect = self.crop_func(keypoints)
+        trans_mat = np.identity(4)
+        rect = self.crop_func(keypoints)
 
-            im = crop_image(im, rect)
+        im = crop_image(im, rect)
 
-            scale = w / rect[2]
-            trans_mat *= scale
-            trans_mat[3,3] = 1.0
-            trans_mat[0, 3] = -scale*(rect[0] + rect[2]//2 - w//2) * scale_im2ndc
-            trans_mat[1, 3] = -scale*(rect[1] + rect[3]//2 - h//2) * scale_im2ndc
+        scale = w / rect[2]
+        trans_mat *= scale
+        trans_mat[3,3] = 1.0
+        trans_mat[0, 3] = -scale*(rect[0] + rect[2]//2 - w//2) * scale_im2ndc
+        trans_mat[1, 3] = -scale*(rect[1] + rect[3]//2 - h//2) * scale_im2ndc
+        
+        if self.opt.random_body_chop and np.random.rand() > 0.5 and self.is_train:
+            y_offset = random.randint(-int(0.1*im.shape[0]),0)
+            if y_offset != 0:
+                im[y_offset:,:,3] = 0.0
+
+        im = im / 255.0
+        im[:,:,:3] /= im[:,:,3:] + 1e-8
+        im = (255.0 * im).astype(np.uint8)[:,:,[2,1,0,3]]
+
+        intrinsic = np.matmul(trans_mat, intrinsic)
+        
+        im = cv2.resize(im, (512, 512))
+
+        render = Image.fromarray(im[:,:,:3]).convert('RGB')
+        mask = Image.fromarray(im[:,:,3]).convert('L')
             
-            if self.opt.random_body_chop and np.random.rand() > 0.5 and self.is_train:
-                y_offset = random.randint(-int(0.1*im.shape[0]),0)
-                if y_offset != 0:
-                    im[y_offset:,:,3] = 0.0
+        tw, th = 512, 512
+        dx, dy = 0, 0
+        if self.is_train:
+            # pad images
+            w, h = render.size
 
-            im = im / 255.0
-            im[:,:,:3] /= im[:,:,3:] + 1e-8
-            im = (255.0 * im).astype(np.uint8)[:,:,[2,1,0,3]]
+            # random flip
+            if self.opt.random_flip and np.random.rand() > 0.5 and self.is_train:
+                intrinsic[0, :] *= -1
+                render = transforms.RandomHorizontalFlip(p=1.0)(render)
+                mask = transforms.RandomHorizontalFlip(p=1.0)(mask)
 
-            intrinsic = np.matmul(trans_mat, intrinsic)
+            # random scale 
+            if self.opt.random_scale:
+                rand_scale = random.uniform(0.95, 1.05)
+                w = int(rand_scale * w)
+                h = int(rand_scale * h)
+                render = render.resize((w, h), Image.BILINEAR)
+                mask = mask.resize((w, h), Image.BILINEAR)
+                intrinsic[:3,:] *= rand_scale
             
-            im = cv2.resize(im, (512, 512))
+            if self.opt.random_rotate:
+                rotate_degree = (random.random()-0.5) * 10.0
+                theta = -(rotate_degree/180.) * np.pi
+                rotMatrix = np.array([[np.cos(theta), -np.sin(theta)], 
+                                    [np.sin(theta),  np.cos(theta)]])
+                center = np.array([[render.size[0]/2,render.size[1]/2]])
+                rot_matrix = np.identity(4)
+                rot_matrix[:2,:2] = rotMatrix
 
-            render = Image.fromarray(im[:,:,:3]).convert('RGB')
-            mask = Image.fromarray(im[:,:,3]).convert('L')
-                
-            tw, th = 512, 512
-            dx, dy = 0, 0
-            if self.is_train and self.num_views < 2:
-                # pad images
+                intrinsic = np.matmul(rot_matrix, intrinsic)
+                render = render.rotate(rotate_degree, Image.BILINEAR)
+                mask = mask.rotate(rotate_degree, Image.BILINEAR)
+
+            # # random translate in the pixel space
+            if self.opt.random_trans:
+                pad_size = int(0.08 * tw)
+                render = ImageOps.expand(render, pad_size, fill=0)
+                mask = ImageOps.expand(mask, pad_size, fill=0)
+
                 w, h = render.size
+                dx = random.randint(-int(round((w-tw)/4.0)),
+                                    int(round((w-tw)/4.0)))
+                dy = random.randint(-int(round((h-th)/4.0)),
+                                    int(round((h-th)/4.0)))
+                trans_intrinsic = np.identity(4)
+                intrinsic[0, 3] += -dx / float(tw // 2)
+                intrinsic[1, 3] += -dy / float(th // 2)
 
-                # random flip
-                if self.opt.random_flip and np.random.rand() > 0.5 and self.is_train:
-                    intrinsic[0, :] *= -1
-                    render = transforms.RandomHorizontalFlip(p=1.0)(render)
-                    mask = transforms.RandomHorizontalFlip(p=1.0)(mask)
+        w, h = render.size    
+        x1 = int(round((w - tw) / 2.)) + dx
+        y1 = int(round((h - th) / 2.)) + dy
 
-                # random scale 
-                if self.opt.random_scale:
-                    rand_scale = random.uniform(0.95, 1.05)
-                    w = int(rand_scale * w)
-                    h = int(rand_scale * h)
-                    render = render.resize((w, h), Image.BILINEAR)
-                    mask = mask.resize((w, h), Image.BILINEAR)
-                    intrinsic[:3,:] *= rand_scale
-                
-                if self.opt.random_rotate:
-                    rotate_degree = (random.random()-0.5) * 10.0
-                    theta = -(rotate_degree/180.) * np.pi
-                    rotMatrix = np.array([[np.cos(theta), -np.sin(theta)], 
-                                        [np.sin(theta),  np.cos(theta)]])
-                    center = np.array([[render.size[0]/2,render.size[1]/2]])
-                    rot_matrix = np.identity(4)
-                    rot_matrix[:2,:2] = rotMatrix
+        render = render.crop((x1, y1, x1 + tw, y1 + th))
+        mask = mask.crop((x1, y1, x1 + tw, y1 + th))
 
-                    intrinsic = np.matmul(rot_matrix, intrinsic)
-                    render = render.rotate(rotate_degree, Image.BILINEAR)
-                    mask = mask.rotate(rotate_degree, Image.BILINEAR)
+        if self.opt.random_bg and len(self.bg_list) != 0 and self.is_train:                
+            bg_path = os.path.join(self.BG, random.choice(self.bg_list))
+        else:
+            uid = sid * len(self.yaw_list) * (view_id * len(self.pitch_list) + pitch) 
+            bg_path = os.path.join(self.BG, self.bg_list[uid % len(self.bg_list)])
+        bg = Image.open(bg_path).convert('RGB')
 
-                # # random translate in the pixel space
-                if self.opt.random_trans:
-                    pad_size = int(0.08 * tw)
-                    render = ImageOps.expand(render, pad_size, fill=0)
-                    mask = ImageOps.expand(mask, pad_size, fill=0)
+        render = Image.composite(render, bg, mask)
 
-                    w, h = render.size
-                    dx = random.randint(-int(round((w-tw)/4.0)),
-                                        int(round((w-tw)/4.0)))
-                    dy = random.randint(-int(round((h-th)/4.0)),
-                                        int(round((h-th)/4.0)))
-                    trans_intrinsic = np.identity(4)
-                    intrinsic[0, 3] += -dx / float(tw // 2)
-                    intrinsic[1, 3] += -dy / float(th // 2)
+        if not self.num_sample_color and self.is_train:
+            # image augmentation
+            render = self.aug_trans(render)
 
-            w, h = render.size    
-            x1 = int(round((w - tw) / 2.)) + dx
-            y1 = int(round((h - th) / 2.)) + dy
+            if self.opt.aug_blur > 0.00001:
+                blur = GaussianBlur(np.random.uniform(0, self.opt.aug_blur))
+                render = render.filter(blur)
 
-            render = render.crop((x1, y1, x1 + tw, y1 + th))
-            mask = mask.crop((x1, y1, x1 + tw, y1 + th))
+        calib = torch.Tensor(np.matmul(intrinsic, extrinsic)).float()
+        extrinsic = torch.Tensor(extrinsic).float()
 
-            if self.opt.random_bg and len(self.bg_list) != 0 and self.is_train:                
-                bg_path = os.path.join(self.BG, random.choice(self.bg_list))
-            else:
-                uid = sid * len(self.yaw_list) * (view_id * len(self.pitch_list) + pitch) 
-                bg_path = os.path.join(self.BG, self.bg_list[uid % len(self.bg_list)])
-            bg = Image.open(bg_path).convert('RGB')
+        render = self.to_tensor(render)
 
-            render = Image.composite(render, bg, mask)
+        mask = self.to_tensor_mask(mask)
 
-            if not self.num_sample_color and self.is_train and self.num_views < 2:
-                # image augmentation
-                render = self.aug_trans(render)
-
-                if self.opt.aug_blur > 0.00001:
-                    blur = GaussianBlur(np.random.uniform(0, self.opt.aug_blur))
-                    render = render.filter(blur)
-
-            # intrinsic = np.matmul(trans_intrinsic, np.matmul(ndc_intrinsic, scale_intrinsic))
-            calib = torch.Tensor(np.matmul(intrinsic, extrinsic)).float()
-            extrinsic = torch.Tensor(extrinsic).float()
-
-            render = self.to_tensor(render)
-
-            mask = self.to_tensor_mask(mask)
-            mask_list.append(mask)
-
-            if not self.opt.random_bg or len(self.bg_list) == 0:                
-                render = mask.expand_as(render) * render
-
-            # img = render.permute(1,2,0).numpy()[:,:,::-1]
-            # cv2.imshow('image', (0.5*img + 0.5))
-            # cv2.waitKey(1)
-
-            render_list.append(render)
-            calib_list.append(calib)
-            extrinsic_list.append(extrinsic)
-            file_list.append(render_path)
+        if not self.opt.random_bg or len(self.bg_list) == 0:                
+            render = mask.expand_as(render) * render
 
         return {
-            'img': torch.stack(render_list, dim=0),
-            'calib': torch.stack(calib_list, dim=0),
-            'extrinsic': torch.stack(extrinsic_list, dim=0),
-            'mask': torch.stack(mask_list, dim=0),
-            'files': file_list
+            'img': render,
+            'calib': calib,
+            'extrinsic': extrinsic,
+            'mask': mask,
+            'files': [render_path]
         }
 
     def get_sample(self, subject, calib, mask=None):
@@ -540,7 +481,6 @@ class RPDatasetParts(Dataset):
 
         rand_idx = np.random.randint(num_files)
         pts = np.load(os.path.join(SAMPLE_DIR, 'sdf%04d.npy' % rand_idx))
-
         ptsh = np.matmul(np.concatenate([pts[:,:3], np.ones((pts.shape[0],1))], 1), calib.T)[:, :3]
         inbb = (ptsh[:, 0] >= -1) & (ptsh[:, 0] <= 1) & (ptsh[:, 1] >= -1) & \
                (ptsh[:, 1] <= 1) & (ptsh[:, 2] >= -1) & (ptsh[:, 2] <= 1)
@@ -575,21 +515,6 @@ class RPDatasetParts(Dataset):
         in_pts = pts[in_mask]
         out_pts = pts[out_mask]
 
-        # rand_pts = np.concatenate(
-        #     [2.0 * np.random.rand(self.num_sample_inout, 3) - 1.0, np.ones((self.num_sample_inout, 1))],
-        #     1)  # [-1,1]
-        # x = (self.load_size * (0.5 * rand_pts[:,0] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
-        # y = (self.load_size * (0.5 * rand_pts[:,1] + 0.5)).astype(np.int32).clip(0, self.load_size-1)
-        # idx = y * self.load_size + x
-        # inmask = mask.reshape(-1)[idx] > 0.0
-        # rand_pts = np.matmul(rand_pts, inv(calib).T)[:, :3]
-
-        # in_max = in_pts.max(0) + 5.0
-        # in_min = in_pts.min(0) - 5.0
-        # bbox_in = np.logical_and(np.logical_and(inmask, rand_pts[:,2] < in_max[2]), rand_pts[:,2] > in_min[2])
-        # rand_pts = rand_pts[np.logical_not(bbox_in)][:int(self.opt.uniform_ratio*self.num_sample_inout)]
-        # out_pts = np.concatenate([out_pts, rand_pts], 0)
-
         samples = np.concatenate([in_pts, out_pts], 0)
         labels = np.concatenate([np.ones((in_pts.shape[0], 1)), np.zeros((out_pts.shape[0], 1))], 0)
         ratio = float(out_pts.shape[0])/float(samples.shape[0])
@@ -597,7 +522,7 @@ class RPDatasetParts(Dataset):
         if ratio > 0.99:
             raise IOError('invalid data sample')
 
-        if samples.shape[0] != self.opt.num_sample_inout:# + int(self.opt.uniform_ratio * self.num_sample_inout):
+        if samples.shape[0] != self.opt.num_sample_inout:
             raise IOError('unable to sample sufficient number of points')
 
         samples = torch.Tensor(samples.T).float()
@@ -780,16 +705,17 @@ class RPDatasetParts(Dataset):
                 'b_min': self.B_MIN,
                 'b_max': self.B_MAX,
             }
-            render_data = self.get_render(sid, num_views=self.num_views, view_id=vid,
-                                        pid=pid, random_sample=self.opt.random_multiview)
+            render_data = self.get_render(sid, view_id=vid, pid=pid)
             res.update(render_data)
             if not self.num_sample_color and self.opt.num_sample_inout:
-                sample_data = self.get_sample(subject, render_data['calib'][0].numpy(), render_data['mask'][0].numpy()) 
-                sample_data = self.get_point_sampling(subject, render_data['calib'][0].numpy(), sample_data)
+                sample_data = self.get_sample(subject, render_data['calib'].numpy(), render_data['mask'].numpy()) 
+                sample_data = self.get_point_sampling(subject, render_data['calib'].numpy(), sample_data)
                 res.update(sample_data)
             elif not self.num_sample_color:
-                sample_data = self.get_point_sampling(subject, render_data['calib'][0].numpy())
+                sample_data = self.get_point_sampling(subject, render_data['calib'].numpy())
                 res.update(sample_data)
+
+            # for debug only
             # p = sample_data['samples'].t().numpy()
             # calib = render_data['calib'][0].numpy()
             # mask = (255.0*(0.5*render_data['img'][0].permute(1,2,0).numpy()[:,:,::-1]+0.5)).astype(np.uint8)
@@ -800,14 +726,12 @@ class RPDatasetParts(Dataset):
             # # mask = cv2.putText(mask, render_data['files'][0], (5, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 0, 0), lineType=cv2.LINE_AA) 
             # cv2.imwrite('tmp.png', mask)
             # exit()
-            # cv2.waitKey(1000)
-            
             
             if self.num_sample_normal:
-                normal_data = self.get_normal_sampling(subject, render_data['calib'][0].numpy())
+                normal_data = self.get_normal_sampling(subject, render_data['calib'].numpy())
                 res.update(normal_data)
             if self.num_sample_color:
-                color_data = self.get_color_sampling(subject, render_data['calib'][0].numpy(), vid=vid)
+                color_data = self.get_color_sampling(subject, render_data['calib'].numpy(), vid=vid)
                 res.update(color_data)
             return res
         except Exception as e:
@@ -819,32 +743,3 @@ class RPDatasetParts(Dataset):
 
     def __getitem__(self, index):
         return self.get_item(index)
-
-def test(is_train=True):
-
-    max_yaw_angle = 10
-    max_pitch_angle = 5
-    interval_yaw = 2
-    interval_pitch = 5
-    yaw_size = max_yaw_angle
-    intv_yaw = interval_yaw
-    pitch_size = 2 * max_pitch_angle + 1
-    intv_pitch = interval_pitch
-
-    yaw_val = yaw_size - yaw_size // intv_yaw if is_train else yaw_size // intv_yaw
-    pitch_val = pitch_size - pitch_size // intv_pitch - 1 if is_train else pitch_size // intv_pitch + 1
-        
-    for tmp in range(0, yaw_val * pitch_val):
-        if is_train:
-            vid = tmp % yaw_val
-            pid = tmp // yaw_val
-            vid = intv_yaw * (vid // (intv_yaw - 1)) + vid % (intv_yaw - 1) + 1
-            pid = intv_pitch * (pid // (intv_pitch- 1)) + pid % (intv_pitch - 1) + 1 - max_pitch_angle
-        else:
-            vid = tmp % yaw_val
-            pid = tmp // yaw_val
-            vid = intv_yaw * vid
-            pid = intv_pitch * pid - max_pitch_angle
-
-if __name__ in '__main__':
-    test(True)
