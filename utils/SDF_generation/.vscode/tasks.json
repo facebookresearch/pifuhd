@@ -1,0 +1,29 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Build with gcc",
+        "type": "shell",
+        "command": "gcc",
+        "args": [
+          "-std=c++17",
+          "-Ofast",
+          "-Wno-write-strings",
+          "tiny_obj_loader.cc",
+          "main.cpp",
+          "-o",
+          "main.out",
+          "-L~/usr/lib64",
+          "-lstdc++",
+          "-lopenvdb",
+          "-ltbb",
+          "-lHalf",
+          "-lm"
+        ],
+        "group": {
+          "kind": "build",
+          "isDefault": true
+        }
+      }
+    ]
+  }

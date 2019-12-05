@@ -29,7 +29,7 @@ python -m apps.submit
 ```
 
 ## Testing
-1. run the following script to get joints for each image for testing (joints are used for image cropping only.).
+1. run the following script to get joints for each image for testing (joints are used for image cropping only.). Make sure you correctly set the location of OpenPose binary.
 ```
 cd utils
 python process_openpose.py -f {path_of_images} -d {path_of_images}
@@ -69,4 +69,39 @@ python -m apps.submit_eval
 ```
 cd utils
 python -m evaluator -r {path_of_results} -t {path_of_eval_dataset}
+```
+
+## Precompute Occupancy Labels
+for occupancy learning, the code offers several ways to obtain a pair of points and in/out labels. 
+
+`--sampling_otf` enables on-the-fly sampling, which is slower but eliminates the need for large storage. This option supports lower PIFu training, but unfortunately this mode is currently not supported for upper PIFu training.
+
+To generate training samples based on gaussian ball perturbation, please follow the instruction below. This data generation is necessary to train upper PIFu.
+
+1. set `--dataroot` to `pifu_data` directory in `./apps/generate_points.py` and run the following command. It will distribute data generation using cluster and should be done with in 1-2 hours.
+```
+python -m apps.generate_points
+```
+
+To generate training samples based on SDF, which cannot be computed on-the-fly, please follow the instruction below. This data generation may be troublesome due to the involvement of multiple programs. As this is used for only lower PIFu to improve the robustness, you could ignore this data generation. In this case, please set `--num_sample_inout` to `0`.
+1. install [openvdb](https://www.openvdb.org/download/). This is probably the hardest part especially for Fedora... for ubuntu, apt-get should be sufficient.
+
+2. compile `utils/SDF_generation/main.cpp`. I have included configuration for vscode. Open `utils/SDF_generation` with vscode as a new window and build with CTRL+SHIFT+B. You may get some linker errors including OpenVDB. Make sure you install all the dependency and library path is linked properly.  `main.out` is generated under `utils/SDF_generation`.
+
+3. run the following code to convert meshes into signed distance field after setting mesh data path as well as `pifu_data`. The code generates `{subject_name}_sdf.obj` and `{subject_name}_sdf.data` under `renderpeople/{subject_name}`.
+```
+cd utils/SDF_generation
+python process_rp.py
+```
+
+4. move the generated sdf data.
+```
+mkdir {pifu_data_path}/GEO/SAMPLE/data
+mv {renderpeople_path}/*/*sdf.data {pifu_data_path}/GEO/SAMPLE/data/
+```
+
+5. to load the sdf data on-the-fly, the following code will split them into multiple files.
+```
+cd utils/SDF_generation
+python convert_numpy.py -i {pifu_data_path}/GEO/SAMPLE/data -o {pifu_data_path}/GEO/SAMPLE 
 ```
