@@ -5,6 +5,7 @@ import os
 class BaseOptions():
     def __init__(self):
         self.initialized = False
+        self.parser = None
 
     def initialize(self, parser):
         # Datasets related
@@ -175,13 +176,12 @@ class BaseOptions():
             parser = argparse.ArgumentParser(
                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
             parser = self.initialize(parser)
-
-        self.parser = parser
+            self.parser = parser
 
         if args is None:
-            return parser.parse_args()
+            return self.parser.parse_args()
         else:
-            return parser.parse_args(args)
+            return self.parser.parse_args(args)
 
     def print_options(self, opt):
         message = ''
