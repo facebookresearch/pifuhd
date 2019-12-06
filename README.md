@@ -28,11 +28,16 @@ This codebase provides:
 python -m apps.submit
 ```
 
+## Download Pre-trained model and test data
+
+Pre-trained model: 
+Test data (Images + Keypoint detections): 
+
 ## Testing
 1. run the following script to get joints for each image for testing (joints are used for image cropping only.). Make sure you correctly set the location of OpenPose binary.
 ```
 cd utils
-python process_openpose.py -f {path_of_images} -d {path_of_images}
+python process_openpose.py -i {path_of_images} -o {path_of_images}
 ```
 
 2. run the following script to run evaluation. Make sure to set `--dataroot` to `path_of_images`, `--results_path` to where you want to dump out results, and `--load_netMR_checkpoint_path` to the checkpoint.
