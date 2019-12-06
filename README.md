@@ -30,8 +30,9 @@ python -m apps.submit
 
 ## Download Pre-trained model and test data
 
-Pre-trained model: 
-Test data (Images + Keypoint detections): 
+Pre-trained model: https://www.dropbox.com/s/8qsvbeq9tfbq3ji/checkpoints.zip?dl=0
+
+Test data (Images + Keypoint detections): https://www.dropbox.com/s/2s9nk51ebvb5ibl/input_test.zip?dl=0
 
 ## Testing
 1. run the following script to get joints for each image for testing (joints are used for image cropping only.). Make sure you correctly set the location of OpenPose binary.
