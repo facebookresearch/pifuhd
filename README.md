@@ -22,17 +22,23 @@ This codebase provides:
 - OpenGL (for rendering)
 - tinyobjloader (need to compile from source, but only for rendering)
 
-## Training 
-1. run the following script after commenting out/in relevant training. Make sure you set dataroot properly to `pifu_data`. You can choose whether to use faircluster or local. 
-```
-python -m apps.submit
-```
+
 
 ## Download Pre-trained model and test data
 
 Pre-trained model: https://www.dropbox.com/s/8qsvbeq9tfbq3ji/checkpoints.zip?dl=0
 
 Test data (Images + Keypoint detections): https://www.dropbox.com/s/2s9nk51ebvb5ibl/input_test.zip?dl=0
+
+## A Quick Testing
+Open apps/simple_test.py and set `input_path` (the test data folder you downloaded above with jpg and json files), `output_path`, and `checkpoint_path`. Run the code:
+```
+python -m apps.simple_test
+```
+
+Your output will be saved in `output_path`.  
+You may use meshlab (http://www.meshlab.net/) to visualize the 3D mesh output (obj file). 
+
 
 ## Testing
 1. run the following script to get joints for each image for testing (joints are used for image cropping only.). Make sure you correctly set the location of OpenPose binary.
@@ -64,6 +70,13 @@ cd utils
 python -m render_normalized -f {path_of_objs} -ww {rendering_width} -hh {rendering_height} 
 # add -g for geometry rendering. default is normal visualization.
 ```
+
+## Training 
+1. run the following script after commenting out/in relevant training. Make sure you set dataroot properly to `pifu_data`. You can choose whether to use faircluster or local. 
+```
+python -m apps.submit
+```
+
 
 ## Evaluation
 1. comment out under Upper PIFu and comment in under Ablation Study in `./apps/submit_eval` and configure the name of models in model_names. Make sure to set `--dataroot` to `eval_dataset` properly. Then run
