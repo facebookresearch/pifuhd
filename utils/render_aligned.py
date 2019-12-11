@@ -13,6 +13,7 @@ from render.gl.color_render import ColorRender
 import pymesh
 import tinyobjloader
 
+
 import cv2
 import os
 import argparse
@@ -54,12 +55,17 @@ for i, file in enumerate(files):
 
     attrib = reader.GetAttrib()
     shapes = reader.GetShapes()
+
+
+
     if len(attrib.vertices) == 0:
         continue
     if len(shapes[0].mesh.indices) < 9:
         continue
     vertices = attrib.numpy_vertices().reshape(-1,3)
     faces = shapes[0].mesh.numpy_indices().reshape(-1,9)[:,[0,3,6]]
+
+    # vertices, faces = load_obj_mesh(obj_path)
 
     # print(bbox_max, bbox_min)
     normals = compute_normal(vertices, faces)
@@ -80,18 +86,20 @@ for i, file in enumerate(files):
         img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGRA)
 
         cv2.imwrite(os.path.join(file_dir, 'render', '%d_%04d.png' % (angle, i)), 255*img)
+        print(file_dir)
     
     file_id = file_name.replace('result_', '')
-    cmd = 'cp %s/%s.png %s/input_%04d.png' % (args.data_dir, file_id, file_dir, i)
+    # cmd = 'cp %s/%s.png %s/input_%04d.png' % (args.data_dir, file_id, file_dir, i)
+    cmd = 'cp %s/%s.jpg %s/input_%04d.jpg' % (args.data_dir, file_id, file_dir, i)
     os.system(cmd)
 
-cmd = 'ffmpeg -framerate 30 -i ' + ('%s/input' % (file_dir)) + '_%04d.png -vcodec libx264 -y -pix_fmt yuv420p -refs 16 ' + os.path.join(file_dir, '%d_input.mp4' % 0)
+cmd = 'ffmpeg -framerate 30 -i ' + ('%s/input' % (file_dir)) + '_%04d.jpg -vcodec libx264 -y -pix_fmt yuv420p -refs 16 ' + os.path.join(file_dir, '%d_input.mp4' % 0)
 os.system(cmd)
 
 for angle in angles:
-    cmd = 'ffmpeg -framerate 30 -i ' + ('%s/render/%d' % (file_dir,angle)) + '_%04d.png -vcodec libx264 -y -pix_fmt yuv420p -refs 16 ' + os.path.join(file_dir, '%d.mp4' % angle)
+    cmd = 'ffmpeg -framerate 30 -i ' + ('%s/render/%d' % (file_dir,angle)) + '_%04d.jpg -vcodec libx264 -y -pix_fmt yuv420p -refs 16 ' + os.path.join(file_dir, '%d.mp4' % angle)
     os.system(cmd)
-    cmd = 'rm %s/render/%d_*.png' % (file_dir, angle)
+    cmd = 'rm %s/render/%d_*.jpg' % (file_dir, angle)
     os.system(cmd)
 
 cmd = 'ffmpeg'

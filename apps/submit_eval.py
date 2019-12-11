@@ -1,11 +1,11 @@
-import submitit
+# import submitit
 from .train import trainerWrapper
 from .recon_eval import reconWrapper
 from .recon_mr import reconWrapper as reconWrapperMR
 from .recon_mr_eval import reconWrapper as reconWrapperMREval
 
-executor = submitit.AutoExecutor(folder="cluster_log")  # submission interface (logs are dumped in the folder)
-executor.update_parameters(timeout_min=2*60, gpus_per_node=4, cpus_per_task=40, partition="dev", name='wildPIFu', comment='cvpr deadline')  # timeout in min
+# executor = submitit.AutoExecutor(folder="cluster_log")  # submission interface (logs are dumped in the folder)
+# executor.update_parameters(timeout_min=2*60, gpus_per_node=4, cpus_per_task=40, partition="dev", name='wildPIFu', comment='cvpr deadline')  # timeout in min
 
 ###############################################################################################
 ##                   Upper PIFu
@@ -24,13 +24,13 @@ for i in range(split_size+1):
        else:
               start_id = i * interval
               end_id = (i+1) * interval
-       cmd = ['--dataroot', './../../data/PPLSS', '--results_path', './../../data/PPLSS',\
+       cmd = ['--dataroot', '/home/hjoo/codes/wildpifu/test/', '--results_path', '.',\
               '--loadSize', '1024', '--resolution', resolution, '--load_netMR_checkpoint_path', \
-              '/private/home/shunsukesaito/CVPR2020/checkpoints/ours_final_train_latest',\
+              '/run/media/hjoo/disk/data/pifuhd/checkpoints/ours_final_train_latest',\
               '--start_id', '%d' % start_id, '--end_id', '%d' % end_id]
        reconWrapperMR(cmd)
-       job = executor.submit(reconWrapperMR, cmd)  
-       print(job.job_id)  # ID of your job
+       # job = executor.submit(reconWrapperMR, cmd)  
+       # print(job.job_id)  # ID of your job
 
 
 ###############################################################################################

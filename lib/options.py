@@ -25,6 +25,7 @@ class BaseOptions():
 
         # Training related
         g_train = parser.add_argument_group('Training')
+        g_train.add_argument('--tmp_id', type=int, default=0, help='tmp_id')
         g_train.add_argument('--gpu_id', type=int, default=0, help='gpu id for cuda')
         g_train.add_argument('--batch_size', type=int, default=32, help='input batch size')
         g_train.add_argument('--num_threads', default=1, type=int, help='# sthreads for loading data')
