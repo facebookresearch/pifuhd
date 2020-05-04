@@ -32,17 +32,7 @@ def precompute_points(opt):
     
     print('# of subjects: ', len(subjects))
     for sub in tqdm(subjects):
-        dataset.precompute_points(sub, num_files=2, start_id=2*opt.tmp_id, sigma=3.0)
-
-def precompute_tsdf(opt):
-    cuda = torch.device('cuda:%d' % opt.gpu_id)
-
-    dataset = RPOtfDataset(opt, phase='train')
-
-    subjects = dataset.get_subjects()
-
-    for sub in subjects:
-        dataset.precompute_tsdf(sub, num_files=100, sigma=3.0)
+        dataset.precompute_points(sub, num_files=2, start_id=2*opt.tmp_id, sigma=3.0) # you can change sigma
 
 def pgWrapper(args=None):
     opt = parser.parse(args)
