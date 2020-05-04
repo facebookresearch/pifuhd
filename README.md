@@ -1,4 +1,4 @@
-# Multi-Level Pixel-Aligned Implicit Function for High-Resolution 3D Human Digitization
+# PIFuHD: Multi-Level Pixel-Aligned Implicit Function for High-Resolution 3D Human Digitization
 
 This repository contains a pytorch implementation of "Multi-Level Pixel-Aligned Implicit Function for High-Resolution 3D Human Digitization".
 
