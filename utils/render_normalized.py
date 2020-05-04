@@ -55,9 +55,9 @@ def make_rotate(rx, ry, rz):
     return R
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-f', '--file_dir', type=str, default='./')
-parser.add_argument('-ww', '--width', type=int, default=512)
-parser.add_argument('-hh', '--height', type=int, default=512)
+parser.add_argument('-f', '--file_dir', type=str, default='/home/hjoo/Dropbox (Facebook)/pifu_test/output_0101/mr_fullbody_no_nml_hg_fp0_1112/recon')
+parser.add_argument('-ww', '--width', type=int, default=1280)
+parser.add_argument('-hh', '--height', type=int, default=1280)
 parser.add_argument('-g', '--geo_render', action='store_true', help='default is normal rendering')
 
 args = parser.parse_args()
@@ -76,10 +76,12 @@ for (root,dirs,files) in os.walk(args.file_dir, topdown=True):
     for file in files:
         if '.obj' in file:
             obj_files.append(os.path.join(root, file))
+print(obj_files)
 
 R = make_rotate(math.radians(180),0,0)
 
 for i, obj_path in enumerate(obj_files):
+
     print(obj_path)
     obj_file = obj_path.split('/')[-1]
     obj_root = obj_path.replace(obj_file,'')

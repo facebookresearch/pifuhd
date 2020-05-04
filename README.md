@@ -46,12 +46,20 @@ cd utils
 python connected_comp.py -f {path_of_objs}
 ```
 
+## Visualization
 For visualizaton, you have two options. One is to render results in the original image space to demonstrate pixel-aligned reconstructions with the following code. The rendered animation (.mp4) will be stored under `{path_of_objs}`.
 ```
-cd utils
-python -m render_aligned -f {path_of_objs} -d {path_of_original_images} -ww {image_width} -hh {image_height} 
-# add -g for geometry rendering. default is normal visualization 
+python -m utils.render_aligned -f {path_of_objs} -i {path_of_original_images} -ww {image_width} -hh {image_height} 
+#example:  python -m utils.render_aligned -f ~/data/pifuvideos/IMG_2550_output/mr_fullbody_no_nml_hg_fp0_1112/recon/ -i ~/data/pifuvideos/IMG_2550 -ww 1280 -hh 1920 --png -g
 ```
+
+There are several options:
+- "-g": to visualize geometry rendering
+- "--png": if your input images are png format. Default if jpg
+- "-v": generat concat video by concatenating vertically
+
+
+
 The other option is to render results with turn-table with the following code. The rendered animation (.mp4) will be stored under `{path_of_objs}`.
 ```
 cd utils
@@ -70,3 +78,6 @@ python -m apps.submit_eval
 cd utils
 python -m evaluator -r {path_of_results} -t {path_of_eval_dataset}
 ```
+
+## Running in FAIR Cluster
+See [README_devfair.MD](README_devfair.MD)
