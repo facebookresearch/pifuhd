@@ -134,7 +134,8 @@ def upperbody_crop(pts):
 #     return (x1, y1, x2-x1, y2-y1)
 
 def fullbody_crop(pts):
-    flags = pts[:,2] > 0.5
+    flags = pts[:,2] > 0.5      #openpose
+    # flags = pts[:,2] > 0.2  #detectron
     check_id = [11,19,21,22]
     cnt = sum(flags[check_id])
 
@@ -222,7 +223,8 @@ class EvalWPoseDataset(Dataset):
                         tmp = data['people'][i]
                         keypoints = np.array(tmp['pose_keypoints_2d']).reshape(-1,3)
 
-                        flags = keypoints[:,2] > 0.5
+                        flags = keypoints[:,2] > 0.5 #openpose
+                        # flags = keypoints[:,2] > 0.2  #detectron
                         if sum(flags) == 0:
                             continue
                         bbox = keypoints[flags]
@@ -238,7 +240,8 @@ class EvalWPoseDataset(Dataset):
 
             keypoints = np.array(selected_data['pose_keypoints_2d']).reshape(-1,3)
 
-            flags = keypoints[:,2] > 0.5
+            flags = keypoints[:,2] > 0.5   #openpose
+            # flags = keypoints[:,2] > 0.2    #detectron
 
             nflag = flags[0]
             mflag = flags[1]

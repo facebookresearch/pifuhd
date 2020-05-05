@@ -81,6 +81,53 @@ def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True, compo
         print(e)
 
 
+def gen_mesh_imgColor(res, net, cuda, data, save_path, thresh=0.5, use_octree=True, components=False):
+    image_tensor_global = data['img_512'].to(device=cuda)
+    image_tensor = data['img'].to(device=cuda)
+    calib_tensor = data['calib'].to(device=cuda)
+
+    net.filter_global(image_tensor_global)
+    net.filter_local(image_tensor[:,None])
+
+    try:
+        if net.netG.netF is not None:
+            image_tensor_global = torch.cat([image_tensor_global, net.netG.nmlF], 0)
+        if net.netG.netB is not None:
+            image_tensor_global = torch.cat([image_tensor_global, net.netG.nmlB], 0)
+    except:
+        pass
+
+    b_min = data['b_min']
+    b_max = data['b_max']
+    try:
+        save_img_path = save_path[:-4] + '.png'
+        save_img_list = []
+        for v in range(image_tensor_global.shape[0]):
+            save_img = (np.transpose(image_tensor_global[v].detach().cpu().numpy(), (1, 2, 0)) * 0.5 + 0.5)[:, :, ::-1] * 255.0
+            save_img_list.append(save_img)
+        save_img = np.concatenate(save_img_list, axis=1)
+        cv2.imwrite(save_img_path, save_img)
+
+        verts, faces, _, _ = reconstruction(
+            net, cuda, calib_tensor, res, b_min, b_max, thresh, use_octree=use_octree, num_samples=100000)
+        verts_tensor = torch.from_numpy(verts.T).unsqueeze(0).to(device=cuda).float()
+
+        # if this returns error, projection must be defined somewhere else
+        xyz_tensor = net.projection(verts_tensor, calib_tensor[:1])
+        uv = xyz_tensor[:, :2, :]
+        color = index(image_tensor[:1], uv).detach().cpu().numpy()[0].T
+        color = color * 0.5 + 0.5
+
+        if 'calib_world' in data:
+            calib_world = data['calib_world'].numpy()[0]
+            verts = np.matmul(np.concatenate([verts, np.ones_like(verts[:,:1])],1), inv(calib_world).T)[:,:3]
+
+        save_obj_mesh_with_color(save_path, verts, faces, color)
+
+    except Exception as e:
+        print(e)
+
+
 def recon(opt):
     # load checkpoints
     state_dict_path = None
@@ -165,8 +212,17 @@ def recon(opt):
             # for multi-person processing, set it to False
             if True:
                 test_data = test_dataset[i]
-                save_path = '%s/%s/recon/result_%s.obj' % (opt.results_path, opt.name, test_data['name'])
-                gen_mesh(opt.resolution, netMR, cuda, test_data, save_path, components=opt.use_compose)
+                #save_path = '%s/%s/recon/result_%s.obj' % (opt.results_path, opt.name, test_data['name'])
+                # save_path = '%s/%s/recon/result_%s_128.obj' % (opt.results_path, opt.name, test_data['name'])
+                # print(save_path)
+                # gen_mesh(128, netMR, cuda, test_data, save_path, components=opt.use_compose)
+
+                save_path = '%s/%s/recon/result_%s_512.obj' % (opt.results_path, opt.name, test_data['name'])
+
+                print(save_path)
+                gen_mesh(512, netMR, cuda, test_data, save_path, components=opt.use_compose)
+                #gen_mesh(opt.resolution, netMR, cuda, test_data, save_path, components=opt.use_compose)
+                #gen_mesh_imgColor(opt.resolution, netMR, cuda, test_data, save_path, components=opt.use_compose)
             else:
                 for j in range(test_dataset.get_n_person(i)):
                     test_dataset.person_id = j

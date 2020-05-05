@@ -96,7 +96,10 @@ def recon(opt):
     cuda = torch.device('cuda:%d' % opt.gpu_id)
 
     # test_dataset = EvalDataset(opt)
-    test_dataset = EvalRPDataset(opt)
+    # test_dataset = EvalRPDataset(opt)
+    test_dataset = EvalWPoseDataset(opt)
+
+    
 
     print('test data size: ', len(test_dataset))
     projection_mode = test_dataset.projection_mode

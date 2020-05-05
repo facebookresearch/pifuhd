@@ -6,10 +6,17 @@ from .train_mr import trainerWrapper as trainerWrapperMR
 from .recon import reconWrapper
 
 
-base_cmd =['--dataroot','./../../data/pifu_data', '--dataset', 'renderppl',
+base_cmd =['--dataroot','/private/home/hjoo/data/pifuhd/CVPR2020/data/pifu_data', '--dataset', 'renderppl',
             '--random_flip', '--random_scale', '--random_trans', '--random_rotate', '--random_bg',
             '--linear_anneal_sigma', '--norm', 'group', '--num_threads', '40', '--crop_type', 'fullbody',
             '--z_size', '200.0', '--occ_loss_type', 'bce', '--mask_ratio', '0.2']
+# VS code debugging
+# base_cmd =['--dataroot','/private/home/hjoo/data/pifuhd/CVPR2020/data/pifu_data', '--dataset', 'renderppl',
+#             '--random_flip', '--random_scale', '--random_trans', '--random_rotate', '--random_bg', #'--continue_train',
+#             '--linear_anneal_sigma', '--norm', 'group', '--num_threads', '40', '--crop_type', 'fullbody',
+#             '--z_size', '200.0', '--occ_loss_type', 'bce', '--mask_ratio', '0.2']
+
+
 
 executor = submitit.AutoExecutor(folder="cluster_log")  # submission interface (logs are dumped in the folder)
 executor.update_parameters(timeout_min=72*60, gpus_per_node=4, cpus_per_task=40, partition="dev", name='wildPIFu', comment='cvpr deadline')  # timeout in min
@@ -19,17 +26,21 @@ executor.update_parameters(timeout_min=72*60, gpus_per_node=4, cpus_per_task=40,
 ###############################################################################################
 
 # plain
-cmd = base_cmd + ['--name', 'lower_pifu', '--sigma_max', '5.0', '--sigma_min', '5.0', '--sigma_surface', '10.0',\
+cmd = base_cmd + ['--name', 'lower_pifu_pretrained', '--sigma_max', '5.0', '--sigma_min', '5.0', '--sigma_surface', '10.0',\
                 '--batch_size', '8', '--num_stack', '4', '--hg_depth', '2', '--mlp_norm', 'none',\
                 '--sampling_otf', '--sampling_parts', '--num_sample_surface', '6000', '--num_sample_inout', '2000', \
                 '--uniform_ratio', '0.2', '--num_iter', '400000', '--schedule', '300000', '350000', '--learning_rate', '1e-3', '--resolution', '256']
 
+cmd = cmd + ['--load_netG_checkpoint_path', '/private/home/hjoo/data/pifuhd/checkpoints/lower_pifu_train_latest',
+            '--checkpoints_path','checkpoint_pretrained','--finetune']
+
+
 # for local
 trainerWrapper(cmd)
 
-# for server
-job = executor.submit(trainerWrapper, cmd)  
-print(job.job_id)  # ID of your job
+# # for server
+# job = executor.submit(trainerWrapper, cmd)  
+# print(job.job_id)  # ID of your job
 
 
 # ###############################################################################################
