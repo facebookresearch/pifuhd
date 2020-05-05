@@ -16,6 +16,18 @@ python script/preprocess_videos.py
 cd apps; python submit_video.py
 ```
 
-3. Visualize output
+3. Clean up mesh
+- Remove isolated floating mesh chunks
+```
+Eg: python -m utils.connected_comp -f {file_path_obj_exists}
+# Eg: python -m utils.connected_comp -f ~/data/pifuvideos/IMG_2553_output/mr_fullbody_no_nml_hg_fp0_1112/recon/
+```
+
+- You can run this in parallel. Check the following script
+```
+cd utils; python submit_meshcleaning.py
+```
+
+4. Visualize output
 - Check "script_render.sh"
 
