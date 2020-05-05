@@ -204,9 +204,7 @@ class Render:
         glBindFramebuffer(GL_FRAMEBUFFER, self.frame_buffer)
         glEnable(GL_DEPTH_TEST)
 
-        # glClearColor(0.0, 0.0, 0.0, 0.0)
-        glClearColor(1.0, 1.0, 1.0, 0.0)        #Black background
-
+        glClearColor(0.0, 0.0, 0.0, 0.0)
         if self.use_inverse_depth:
             glDepthFunc(GL_GREATER)
             glClearDepth(0.0)
@@ -276,8 +274,7 @@ class Render:
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
 
         # Do the clean-up.
-        # glClearColor(0.0, 0.0, 0.0, 0.0)        #Black background
-        glClearColor(1.0, 1.0, 1.0, 0.0)        #Black background
+        glClearColor(0.0, 0.0, 0.0, 0.0)
         glClear(GL_COLOR_BUFFER_BIT)
 
         # We draw a rectangle which covers the whole screen.

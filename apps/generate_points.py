@@ -32,34 +32,24 @@ def precompute_points(opt):
     
     print('# of subjects: ', len(subjects))
     for sub in tqdm(subjects):
-        dataset.precompute_points(sub, num_files=2, start_id=2*opt.tmp_id, sigma=3.0)
-
-def precompute_tsdf(opt):
-    cuda = torch.device('cuda:%d' % opt.gpu_id)
-
-    dataset = RPOtfDataset(opt, phase='train')
-
-    subjects = dataset.get_subjects()
-
-    for sub in subjects:
-        dataset.precompute_tsdf(sub, num_files=100, sigma=3.0)
+        dataset.precompute_points(sub, num_files=2, start_id=2*opt.tmp_id, sigma=3.0) # you can change sigma
 
 def pgWrapper(args=None):
     opt = parser.parse(args)
     precompute_points(opt)
 
-import submitit
+# import submitit
 def submit():
-    base_cmd =['--dataroot', './../../data/pifu_data/', '--num_sample_inout', '500000', '--sampling_mode', 'sigma3_uniform']
+    base_cmd =['--dataroot', '/run/media/hjoo/disk/data/pifuhd/data/pifu_data', '--num_sample_inout', '500000', '--sampling_mode', 'sigma3_uniform']
 
-    executor = submitit.AutoExecutor(folder="tmp_cluster_log")  # submission interface (logs are dumped in the folder)
-    executor.update_parameters(timeout_min=3*60, gpus_per_node=1, cpus_per_task=10, partition="priority", name='wildPIFu', comment='cvpr deadline')  # timeout in min
+#     executor = submitit.AutoExecutor(folder="tmp_cluster_log")  # submission interface (logs are dumped in the folder)
+#     executor.update_parameters(timeout_min=3*60, gpus_per_node=1, cpus_per_task=10, partition="priority", name='wildPIFu', comment='cvpr deadline')  # timeout in min
 
     for i in range(0,50):
         cmd = base_cmd + ['--tmp_id', '%d' % i]
-        # pgWrapper(cmd)
-        job = executor.submit(pgWrapper, cmd)  
-        print(job.job_id)  # ID of your job
+        pgWrapper(cmd)
+        # job = executor.submit(pgWrapper, cmd)  
+        # print(job.job_id)  # ID of your job
 
 if __name__ == '__main__':
     submit()
