@@ -23,7 +23,7 @@ For visualization
 - freeglut (use `sudo apt-get install freeglut3-dev` for ubuntu users)
 - ffmpeg
 
-Note: 12GB GPU memory is required to run PIFuHD model. 
+Note: 12GB GPU memory is recommended to run PIFuHD model. 
 
 
 ## Download Pre-trained model

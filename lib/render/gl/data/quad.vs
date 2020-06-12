@@ -1,5 +1,4 @@
 #version 330 core
-// Copyright (c) Facebook, Inc. and its affiliates. All rights reserved.
 
 layout (location = 0) in vec2 aPos;
 layout (location = 1) in vec2 aTexCoord;

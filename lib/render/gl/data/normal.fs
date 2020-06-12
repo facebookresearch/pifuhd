@@ -1,5 +1,4 @@
 #version 330
-// Copyright (c) Facebook, Inc. and its affiliates. All rights reserved.
 
 out vec4 FragColor;
 

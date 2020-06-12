@@ -1,5 +1,4 @@
 #version 330
-// Copyright (c) Facebook, Inc. and its affiliates. All rights reserved.
 
 layout (location = 0) in vec3 Position;
 layout (location = 1) in vec3 Normal;
