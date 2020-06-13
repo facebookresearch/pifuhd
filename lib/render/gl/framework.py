@@ -7,7 +7,6 @@
 # this module file must exist in the same directory as the tutorial files
 # to be imported properly.
 
-# Copyright (c) Facebook, Inc. and its affiliates. All rights reserved.
 
 import os
 

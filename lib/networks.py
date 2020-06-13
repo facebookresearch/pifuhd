@@ -1,4 +1,3 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All rights reserved.
 '''
 Copyright (C) 2019 NVIDIA Corporation. Ting-Chun Wang, Ming-Yu Liu, Jun-Yan Zhu.
 BSD License. All rights reserved. 
