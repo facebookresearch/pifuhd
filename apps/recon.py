@@ -22,7 +22,7 @@ from numpy.linalg import inv
 
 from lib.options import BaseOptions
 from lib.mesh_util import save_obj_mesh_with_color, reconstruction
-from lib.data import EvalWPoseDataset
+from lib.data import EvalWPoseDataset, EvalDataset
 from lib.model import HGPIFuNetwNML, HGPIFuMRNet
 from lib.geometry import index
 
@@ -65,7 +65,7 @@ def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True, compo
             verts = np.matmul(np.concatenate([verts, np.ones_like(verts[:,:1])],1), inv(calib_world).T)[:,:3]
 
         color = np.zeros(verts.shape)
-        interval = 100000
+        interval = 50000
         for i in range(len(color) // interval + 1):
             left = i * interval
             if i == len(color) // interval:
@@ -128,7 +128,7 @@ def gen_mesh_imgColor(res, net, cuda, data, save_path, thresh=0.5, use_octree=Tr
         print(e)
 
 
-def recon(opt):
+def recon(opt, use_rect=False):
     # load checkpoints
     state_dict_path = None
     if opt.load_netMR_checkpoint_path is not None:
@@ -160,20 +160,21 @@ def recon(opt):
     else:
         raise Exception('failed loading state dict!', state_dict_path)
     
-    parser.print_options(opt)
+    # parser.print_options(opt)
 
     cuda = torch.device('cuda:%d' % opt.gpu_id)
 
-    test_dataset = EvalWPoseDataset(opt)
+    if use_rect:
+        test_dataset = EvalDataset(opt)
+    else:
+        test_dataset = EvalWPoseDataset(opt)
 
     print('test data size: ', len(test_dataset))
     projection_mode = test_dataset.projection_mode
 
     opt_netG = state_dict['opt_netG']
     netG = HGPIFuNetwNML(opt_netG, projection_mode).to(device=cuda)
-    netMR = HGPIFuMRNet(opt, netG, projection_mode)
-
-    netMR = netMR.to(device=cuda)
+    netMR = HGPIFuMRNet(opt, netG, projection_mode).to(device=cuda)
 
     def set_eval():
         netG.eval()
@@ -203,11 +204,10 @@ def recon(opt):
             if True:
                 test_data = test_dataset[i]
 
-                save_path = '%s/%s/recon/result_%s_512.obj' % (opt.results_path, opt.name, test_data['name'])
+                save_path = '%s/%s/recon/result_%s_%d.obj' % (opt.results_path, opt.name, test_data['name'], opt.resolution)
 
                 print(save_path)
                 gen_mesh(opt.resolution, netMR, cuda, test_data, save_path, components=opt.use_compose)
-                #gen_mesh_imgColor(opt.resolution, netMR, cuda, test_data, save_path, components=opt.use_compose)
             else:
                 for j in range(test_dataset.get_n_person(i)):
                     test_dataset.person_id = j
@@ -215,9 +215,9 @@ def recon(opt):
                     save_path = '%s/%s/recon/result_%s_%d.obj' % (opt.results_path, opt.name, test_data['name'], j)
                     gen_mesh(opt.resolution, netMR, cuda, test_data, save_path, components=opt.use_compose)
 
-def reconWrapper(args=None):
+def reconWrapper(args=None, use_rect=False):
     opt = parser.parse(args)
-    recon(opt)
+    recon(opt, use_rect)
 
 if __name__ == '__main__':
     reconWrapper()

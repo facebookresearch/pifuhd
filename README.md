@@ -1,4 +1,6 @@
-# [PIFuHD: Multi-Level Pixel-Aligned Implicit Function for High-Resolution 3D Human Digitization](https://shunsukesaito.github.io/PIFuHD/)
+# [PIFuHD: Multi-Level Pixel-Aligned Implicit Function for High-Resolution 3D Human Digitization (CVPR 2020)](https://shunsukesaito.github.io/PIFuHD/)
+
+[![report](https://img.shields.io/badge/arxiv-report-red)](https://arxiv.org/pdf/2004.00452.pdf) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/11z58bl3meSzo6kFqkahMa35G5jmh2Wgt?usp=sharing)
 
 This repository contains a pytorch implementation of "Multi-Level Pixel-Aligned Implicit Function for High-Resolution 3D Human Digitization".
 
@@ -65,7 +67,15 @@ python -m apps.render_turntable -f {path_of_objs} -ww {rendering_width} -hh {ren
 # add -g for geometry rendering. default is normal visualization.
 ```
 
-
+## Citation
+```
+@inproceedings{saito2020pifuhd,
+  title={PIFuHD: Multi-Level Pixel-Aligned Implicit Function for High-Resolution 3D Human Digitization},
+  author={Saito, Shunsuke and Simon, Tomas and Saragih, Jason and Joo, Hanbyul},
+  booktitle={CVPR},
+  year={2020}
+}
+```
 ## License
 [CC-BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/legalcode). 
 See the [LICENSE](LICENSE) file. 
