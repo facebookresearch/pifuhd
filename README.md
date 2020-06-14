@@ -10,6 +10,10 @@ This codebase provides:
 - test code
 - visualization code
 
+## Demo on Google Colab
+In case you don't have an environment to run PIFuHD, we offer Google Colab demo. You can also upload your own images and reconstruct 3D geometry together with visualization. Try our Colab demo using the following notebook: \
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/11z58bl3meSzo6kFqkahMa35G5jmh2Wgt)
+
 ## Requirements
 - Python 3
 - [PyTorch](https://pytorch.org/) tested on 1.1.0
