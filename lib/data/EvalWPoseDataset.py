@@ -9,7 +9,6 @@ from PIL.ImageFilter import GaussianBlur
 import cv2
 import torch
 import json
-import trimesh
 
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
@@ -144,7 +143,7 @@ class EvalWPoseDataset(Dataset):
         self.projection_mode = projection
 
         self.root = self.opt.dataroot
-        self.img_files = sorted([os.path.join(self.root,f) for f in os.listdir(self.root) if '.png' in f or '.jpg' in f])
+        self.img_files = sorted([os.path.join(self.root,f) for f in os.listdir(self.root) if ('.png' in f or '.jpg' in f) and os.path.exists(os.path.join(self.root,f[:-4]+'_keypoints.json'))])
         self.IMG = os.path.join(self.root)
 
         self.phase = 'val'
