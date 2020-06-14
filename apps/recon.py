@@ -58,7 +58,7 @@ def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True, compo
         cv2.imwrite(save_img_path, save_img)
 
         verts, faces, _, _ = reconstruction(
-            net, cuda, calib_tensor, res, b_min, b_max, thresh, use_octree=use_octree, num_samples=100000)
+            net, cuda, calib_tensor, res, b_min, b_max, thresh, use_octree=use_octree, num_samples=50000)
         verts_tensor = torch.from_numpy(verts.T).unsqueeze(0).to(device=cuda).float()
         if 'calib_world' in data:
             calib_world = data['calib_world'].numpy()[0]
