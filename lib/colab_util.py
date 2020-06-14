@@ -121,15 +121,15 @@ def generate_video_from_obj(obj_path, image_path, video_path, renderer):
 
     # create VideoWriter
     fourcc = cv2. VideoWriter_fourcc(*'MP4V')
-    out = cv2.VideoWriter(video_path, fourcc, 20.0, (1536,512))
+    out = cv2.VideoWriter(video_path, fourcc, 20.0, (1024,512))
 
     for i in tqdm(range(90)):
         R, T = look_at_view_transform(1.8, 0, i*4, device=device)
         images_w_tex = renderer(mesh_w_tex, R=R, T=T)
         images_w_tex = np.clip(images_w_tex[0, ..., :3].cpu().numpy(), 0.0, 1.0)[:, :, ::-1] * 255
-        images_wo_tex = renderer(mesh_wo_tex, R=R, T=T)
-        images_wo_tex = np.clip(images_wo_tex[0, ..., :3].cpu().numpy(), 0.0, 1.0)[:, :, ::-1] * 255
-        image = np.concatenate([input_image, images_w_tex, images_wo_tex], axis=1)
+        # images_wo_tex = renderer(mesh_wo_tex, R=R, T=T)
+        # images_wo_tex = np.clip(images_wo_tex[0, ..., :3].cpu().numpy(), 0.0, 1.0)[:, :, ::-1] * 255
+        image = np.concatenate([input_image, images_w_tex], axis=1)
         out.write(image.astype('uint8'))
     out.release()
 
