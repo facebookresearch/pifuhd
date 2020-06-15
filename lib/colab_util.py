@@ -98,6 +98,7 @@ def get_verts_rgb_colors(obj_path):
 
 def generate_video_from_obj(obj_path, image_path, video_path, renderer):
     input_image = cv2.imread(image_path)
+    input_image = input_image[:,:input_image.shape[1]//3]
     input_image = cv2.resize(input_image, (512,512))
 
     # Setup
