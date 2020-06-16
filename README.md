@@ -80,6 +80,40 @@ python -m apps.render_turntable -f {path_of_objs} -ww {rendering_width} -hh {ren
   year={2020}
 }
 ```
+
+## Relevant Projects
+
+**[Learning to Infer Implicit Surfaces without 3d Supervision (NeurIPS 2019)](http://papers.nips.cc/paper/9039-learning-to-infer-implicit-surfaces-without-3d-supervision.pdf)**  
+*Shichen Liu, Shunsuke Saito, Weikai Chen, Hao Li*
+
+We answer to the question of "how can we learn implicit function if we don't have 3D ground truth?"
+
+**[PIFu: Pixel-Aligned Implicit Function for High-Resolution Clothed Human Digitization (ICCV 2020)](https://shunsukesaito.github.io/PIFu/)**  
+*Shunsuke Saito\*, Zeng Huang\*, Ryota Natsume\*, Shigeo Morishima, Angjoo Kanazawa, Hao Li*
+
+The original work of Pixel-Aligned Implicit Function for geometry and texture reconstruction, unifying sigle-view and multi-view methods.
+
+**[SiCloPe: Silhouette-Based Clothed People (CVPR 2019, best paper finalist)](https://arxiv.org/pdf/1901.00049.pdf)**  
+*Ryota Natsume\*, Shunsuke Saito\*, Zeng Huang, Weikai Chen, Chongyang Ma, Hao Li, Shigeo Morishima*
+
+Our first attempt to reconstruct 3D clothed human body with texture from a single image!
+
+## Other Relevant Works
+**[ARCH: Animatable Reconstruction of Clothed Humans (CVPR 2020)](https://arxiv.org/pdf/2004.04572.pdf)**  
+*Zeng Huang, Yuanlu Xu, Christoph Lassner, Hao Li, Tony Tung*
+
+Learning PIFu in canonical space for animatable avatar generation!
+
+**[Robust 3D Self-portraits in Seconds (CVPR 2020)](http://www.liuyebin.com/portrait/portrait.html)**  
+*Zhe Li, Tao Yu, Chuanyu Pan, Zerong Zheng, Yebin Liu*
+
+They extend PIFu to RGBD + introduce "PIFusion" utilizing PIFu reconstruction for non-rigid fusion.
+
+**[Deep Volumetric Video from Very Sparse Multi-view Performance Capture (ECCV 2018)](http://openaccess.thecvf.com/content_ECCV_2018/papers/Zeng_Huang_Deep_Volumetric_Video_ECCV_2018_paper.pdf)**  
+*Zeng Huang, Tianye Li, Weikai Chen, Yajie Zhao, Jun Xing, Chloe LeGendre, Linjie Luo, Chongyang Ma, Hao Li*
+
+Implict surface learning for sparse view human performance capture!
+
 ## License
 [CC-BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/legalcode). 
 See the [LICENSE](LICENSE) file. 
