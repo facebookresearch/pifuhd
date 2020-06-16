@@ -4,8 +4,7 @@
 
 This repository contains a pytorch implementation of "Multi-Level Pixel-Aligned Implicit Function for High-Resolution 3D Human Digitization".
 
-![Teaser Image](https://raw.githubusercontent.com/facebookresearch/pifuhd/master/media/pifuhd.gif)
-<!-- ![Teaser Image](https://shunsukesaito.github.io/PIFuHD/resources/images/teaser.png) -->
+![Teaser Image](https://shunsukesaito.github.io/PIFuHD/resources/images/pifuhd.gif)
 
 This codebase provides: 
 - test code
