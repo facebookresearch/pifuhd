@@ -87,15 +87,15 @@ python -m apps.render_turntable -f {path_of_objs} -ww {rendering_width} -hh {ren
 
 ## Relevant Projects
 
-**[Learning to Infer Implicit Surfaces without 3d Supervision (NeurIPS 2019)](http://papers.nips.cc/paper/9039-learning-to-infer-implicit-surfaces-without-3d-supervision.pdf)**  
-*Shichen Liu, Shunsuke Saito, Weikai Chen, Hao Li*
-
-We answer to the question of "how can we learn implicit function if we don't have 3D ground truth?"
-
 **[PIFu: Pixel-Aligned Implicit Function for High-Resolution Clothed Human Digitization (ICCV 2019)](https://shunsukesaito.github.io/PIFu/)**  
 *Shunsuke Saito\*, Zeng Huang\*, Ryota Natsume\*, Shigeo Morishima, Angjoo Kanazawa, Hao Li*
 
 The original work of Pixel-Aligned Implicit Function for geometry and texture reconstruction, unifying sigle-view and multi-view methods.
+
+**[Learning to Infer Implicit Surfaces without 3d Supervision (NeurIPS 2019)](http://papers.nips.cc/paper/9039-learning-to-infer-implicit-surfaces-without-3d-supervision.pdf)**  
+*Shichen Liu, Shunsuke Saito, Weikai Chen, Hao Li*
+
+We answer to the question of "how can we learn implicit function if we don't have 3D ground truth?"
 
 **[SiCloPe: Silhouette-Based Clothed People (CVPR 2019, best paper finalist)](https://arxiv.org/pdf/1901.00049.pdf)**  
 *Ryota Natsume\*, Shunsuke Saito\*, Zeng Huang, Weikai Chen, Chongyang Ma, Hao Li, Shigeo Morishima*
