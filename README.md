@@ -3,7 +3,7 @@
 [![report](https://img.shields.io/badge/arxiv-report-red)](https://arxiv.org/pdf/2004.00452.pdf) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/11z58bl3meSzo6kFqkahMa35G5jmh2Wgt?usp=sharing)
 
 News:
-* \[2020/06/15\] Demo with Google Colab (incl. visualization) is available! Please check out [#pifuhd](https://twitter.com/search?q=%23pifuhd&src=recent_search_click&f=live) for many results tested by users!
+* \[2020/06/15\] Demo with Google Colab (incl. visualization) is available! Please check out [#pifuhd on Twitter](https://twitter.com/search?q=%23pifuhd&src=recent_search_click&f=live) for many results tested by users!
 
 This repository contains a pytorch implementation of "Multi-Level Pixel-Aligned Implicit Function for High-Resolution 3D Human Digitization".
 
