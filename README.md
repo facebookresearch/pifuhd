@@ -20,7 +20,7 @@ In case you don't have an environment with GPUs to run PIFuHD, we offer Google C
 
 ## Requirements
 - Python 3
-- [PyTorch](https://pytorch.org/) tested on 1.1.0
+- [PyTorch](https://pytorch.org/) tested on 1.3.0
 - json
 - PIL
 - skimage
