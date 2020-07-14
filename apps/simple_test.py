@@ -16,6 +16,11 @@ parser.add_argument('-r', '--resolution', type=int, default=512)
 parser.add_argument('--use_rect', action='store_true', help='use rectangle for cropping')
 args = parser.parse_args()
 ###############################################################################################
+##                   Modify args
+###############################################################################################
+# args.input_path = 'sample_images/irene_body.jpg'
+args.use_rect = True
+###############################################################################################
 ##                   Upper PIFu
 ###############################################################################################
 

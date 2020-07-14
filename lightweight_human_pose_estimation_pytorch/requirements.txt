@@ -1,0 +1,5 @@
+torch>=0.4.1
+torchvision>=0.2.1
+pycocotools==2.0.0
+opencv-python>=3.4.0.14
+numpy>=1.14.0
