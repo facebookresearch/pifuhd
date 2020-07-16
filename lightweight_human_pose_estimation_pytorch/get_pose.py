@@ -69,11 +69,10 @@ def get_rect(net, images, height_size=512):
 
         np.savetxt(rect_path, np.array(rects), fmt='%d')
 
-if __name__ == '__main__':
+def get_pose(image_path):
 
     net = PoseEstimationWithMobileNet()
     checkpoint = torch.load('checkpoint_iter_370000.pth', map_location='cpu')
     load_state(net, checkpoint)
 
-    image_path = 'sample_images/irene_body.jpg'
     get_rect(net.cuda(), [image_path], 512)

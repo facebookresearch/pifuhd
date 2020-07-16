@@ -1,5 +1,5 @@
 import os
-from lightweight_human_pose_estimation_pytorch import main
+from lightweight_human_pose_estimation_pytorch.get_pose import get_pose
 from apps import simple_test
 from lib.colab_util import generate_video_from_obj, set_renderer
 
@@ -14,7 +14,7 @@ out_img_path = 'results/pifuhd_final/recon/result_%s_256.png' % file_name
 video_path = 'results/pifuhd_final/recon/result_%s_256.mp4' % file_name
 video_display_path = 'results/pifuhd_final/result_%s_256_display.mp4' % file_name
 
-main()
+get_pose(image_path)
 
 simple_test()
 
