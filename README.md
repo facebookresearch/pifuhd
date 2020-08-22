@@ -86,6 +86,10 @@ python -m apps.render_turntable -f {path_of_objs} -ww {rendering_width} -hh {ren
 ```
 
 ## Relevant Projects
+**[Monocular Real-Time Volumetric Performance Capture (ECCV 2020)](https://project-splinter.github.io/)**  
+*Ruilong Li\*, Yuliang Xiu\*, Shunsuke Saito, Zeng Huang, Kyle Olszewski, Hao Li*
+
+The first real-time PIFu by accelerating reconstruction and rendering!!
 
 **[PIFu: Pixel-Aligned Implicit Function for High-Resolution Clothed Human Digitization (ICCV 2019)](https://shunsukesaito.github.io/PIFu/)**  
 *Shunsuke Saito\*, Zeng Huang\*, Ryota Natsume\*, Shigeo Morishima, Angjoo Kanazawa, Hao Li*
