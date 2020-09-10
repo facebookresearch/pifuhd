@@ -164,9 +164,7 @@ def recon(opt, use_rect=False):
     
     # parser.print_options(opt)
 
-    cuda = torch.device('cuda:%d' % opt.gpu_id)
-
-    if use_rect:
+     if use_rect:
         test_dataset = EvalDataset(opt)
     else:
         test_dataset = EvalWPoseDataset(opt)
