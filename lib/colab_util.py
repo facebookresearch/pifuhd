@@ -38,7 +38,7 @@ from IPython.display import HTML
 from base64 import b64encode
 
 # Data structures and functions for rendering
-from pytorch3d.structures import Meshes, Textures
+from pytorch3d.structures import Meshes
 from pytorch3d.renderer import (
     look_at_view_transform,
     OpenGLOrthographicCameras, 
@@ -48,8 +48,8 @@ from pytorch3d.renderer import (
     RasterizationSettings, 
     MeshRenderer, 
     MeshRasterizer,  
-    TexturedSoftPhongShader,
-    HardPhongShader
+    HardPhongShader,
+    TexturesVertex
 )
 
 def set_renderer():
@@ -108,8 +108,8 @@ def generate_video_from_obj(obj_path, image_path, video_path, renderer):
     # Load obj file
     verts_rgb_colors = get_verts_rgb_colors(obj_path)
     verts_rgb_colors = torch.from_numpy(verts_rgb_colors).to(device)
-    textures = Textures(verts_rgb=verts_rgb_colors)
-    wo_textures = Textures(verts_rgb=torch.ones_like(verts_rgb_colors)*0.75)
+    textures = TexturesVertex(verts_features=verts_rgb_colors)
+    # wo_textures = TexturesVertex(verts_features=torch.ones_like(verts_rgb_colors)*0.75)
 
     # Load obj
     mesh = load_objs_as_meshes([obj_path], device=device)
@@ -118,7 +118,7 @@ def generate_video_from_obj(obj_path, image_path, video_path, renderer):
     vers = mesh._verts_list
     faces = mesh._faces_list
     mesh_w_tex = Meshes(vers, faces, textures)
-    mesh_wo_tex = Meshes(vers, faces, wo_textures)
+    # mesh_wo_tex = Meshes(vers, faces, wo_textures)
 
     # create VideoWriter
     fourcc = cv2. VideoWriter_fourcc(*'MP4V')
