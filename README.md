@@ -35,6 +35,12 @@ For visualization
 
 Note: At least 8GB GPU memory is recommended to run PIFuHD model. 
 
+Run the following code to install all pip packages:
+```sh
+pip install -r requirements.txt 
+```
+
+
 
 ## Download Pre-trained model
 
