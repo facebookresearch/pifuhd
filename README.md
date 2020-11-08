@@ -23,9 +23,9 @@ In case you don't have an environment with GPUs to run PIFuHD, we offer Google C
 - [PyTorch](https://pytorch.org/) tested on 1.4.0, 1.5.0
 - json
 - PIL
-- skimage
+- scikit-image
 - tqdm
-- cv2
+- opencv-python
 
 For visualization
 - [trimesh](https://trimsh.org/) with pyembree
