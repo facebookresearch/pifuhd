@@ -1,9 +1,10 @@
-#this is a requirement.txt file
-#to install all this requirements
-#`pip install -r requirements.txt`
-# make sure you have pip installed !!
-# to update just use `pip install -r requirements.txt --upgrade`
-pytorch
+# This is a requirement.txt file
+# to install all these requirements:
+# `pip install -r requirements.txt`
+# Make sure you have pip installed!
+# To update just use `pip install -r requirements.txt --upgrade`
+torch
+torchvision
 Pillow                # PIL
 scikit-image          #skimage
 tqdm
