@@ -18,6 +18,9 @@ import cv2
 import os
 import argparse
 
+import ffmpeg
+import glob
+
 width = 512
 height = 512
 
@@ -122,8 +125,15 @@ for i, obj_path in enumerate(obj_files):
 
         cv2.imwrite(os.path.join(obj_root, 'rot_%04d.png' % cnt), 255*img)
         cnt += 1
-
-    cmd = 'ffmpeg -framerate 30 -i ' + obj_root + '/rot_%04d.png -vcodec libx264 -y -pix_fmt yuv420p -refs 16 ' + os.path.join(obj_root, file_name + '.mp4')
-    os.system(cmd)
-    cmd = 'rm %s/rot_*.png' % obj_root
-    os.system(cmd)
+    
+    # create video from image frames using ffmpeg
+    stream=ffmpeg.input(obj_root+'/rot_%04d.png')
+    stream=ffmpeg.output(stream,os.path.join(obj_root, file_name + '.mp4'), pix_fmt='yuv420p', vcodec='libx264', refs='16')
+    if sys.platform == 'win32':
+        # define ffmpeg location when using windows
+        ffmpeg.run(stream,cmd='C:/Code/pifuhd/ffmpeg/ffmpeg')
+    else:
+        ffmpeg.run(stream)
+    # remove image frames
+    for f in glob.glob('%s/rot_*.png' % obj_root):
+        os.remove(f)

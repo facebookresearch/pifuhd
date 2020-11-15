@@ -1,0 +1,8 @@
+# This is a pip requirements file for optional packages used only for visualisation.
+# To install all these requirements:
+# 'pip install -r optional-requirements.txt'
+# Make sure you have pip installed!
+# To update just use 'pip install -r optional-requirements.txt --upgrade'
+trimesh
+PyOpenGL
+ffmpeg-python
