@@ -1,5 +1,5 @@
 #this is a requirement.txt file
-#to install all this requirements
+#to install all these requirements
 #`pip install -r requirements.txt`
 # make sure you have pip installed !!
 # to update just use `pip install -r requirements.txt --upgrade`
