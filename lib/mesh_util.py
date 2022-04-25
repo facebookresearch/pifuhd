@@ -74,7 +74,7 @@ def reconstruction(net, cuda, calib_tensor,
 
     # Finally we do marching cubes
     try:
-        verts, faces, normals, values = measure.marching_cubes_lewiner(sdf, thresh)
+        verts, faces, normals, values = measure.marching_cubes(sdf, thresh)
         # transform verts into world coordinate system
         trans_mat = np.matmul(calib_inv, mat)
         verts = np.matmul(trans_mat[:3, :3], verts.T) + trans_mat[:3, 3:4]
