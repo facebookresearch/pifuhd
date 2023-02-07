@@ -13,6 +13,7 @@ This codebase provides:
 - test code
 - visualization code
 
+See our [blog post](https://ai.facebook.com/blog/facebook-research-at-cvpr-2020/) to learn more about our work at CVPR2020!
 
 ## Demo on Google Colab
 In case you don't have an environment with GPUs to run PIFuHD, we offer Google Colab demo. You can also upload your own images and reconstruct 3D geometry together with visualization. Try our Colab demo using the following notebook: \
