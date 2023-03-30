@@ -7,7 +7,7 @@ torch
 torchvision
 Pillow                # PIL
 scikit-image          #skimage
-tqdm
+tqdm>=4.6.1,<=4.65.0
 opencv-python         # cv2
 trimesh
 PyOpenGL
