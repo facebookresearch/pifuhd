@@ -64,7 +64,7 @@ def face_crop(pts):
 
     # radius = np.max(np.sqrt(((center[None] - np.stack([]))**2).sum(0))
     # radius = int(1.0*abs(center[1] - mshoulder[1]))
-    center = center.astype(np.int)
+    center = center.astype(int)
 
     x1 = center[0] - radius
     x2 = center[0] + radius
@@ -97,7 +97,7 @@ def upperbody_crop(pts):
         ps = np.stack(ps, 0)
         radius = int(0.8*np.max(np.sqrt(((ps - center[None,:])**2).reshape(-1,2).sum(1)) / np.array(ratio)))
 
-    center = center.astype(np.int)
+    center = center.astype(int)
 
     x1 = center[0] - radius
     x2 = center[0] + radius
@@ -113,7 +113,7 @@ def fullbody_crop(pts):
     cnt = sum(flags[check_id])
 
     if cnt == 0:
-        center = pts[8,:2].astype(np.int)
+        center = pts[8,:2].astype(int)
         pts = pts[pts[:,2] > 0.5][:,:2]
         radius = int(1.45*np.sqrt(((center[None,:] - pts)**2).sum(1)).max(0))
         center[1] += int(0.05*radius)
@@ -122,7 +122,7 @@ def fullbody_crop(pts):
         pmax = pts.max(0)
         pmin = pts.min(0)
 
-        center = (0.5 * (pmax[:2] + pmin[:2])).astype(np.int)
+        center = (0.5 * (pmax[:2] + pmin[:2])).astype(int)
         radius = int(0.65 * max(pmax[0]-pmin[0], pmax[1]-pmin[1]))
 
     x1 = center[0] - radius

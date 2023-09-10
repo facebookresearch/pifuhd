@@ -62,7 +62,7 @@ class EvalDataset(Dataset):
 
     def get_n_person(self, index):
         rect_path = self.img_files[index].replace('.%s' % (self.img_files[index].split('.')[-1]), '_rect.txt')
-        rects = np.loadtxt(rect_path, dtype=np.int32)
+        rects = np.loadtxt(rect_path, dtype=int32)
 
         return rects.shape[0] if len(rects.shape) == 2 else 1
 
@@ -84,7 +84,7 @@ class EvalDataset(Dataset):
 
         trans_mat = np.identity(4)
 
-        rects = np.loadtxt(rect_path, dtype=np.int32)
+        rects = np.loadtxt(rect_path, dtype=int32)
         if len(rects.shape) == 1:
             rects = rects[None]
         pid = min(rects.shape[0]-1, self.person_id)
