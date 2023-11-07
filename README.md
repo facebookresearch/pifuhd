@@ -5,7 +5,7 @@
 <p align="center">
   <img src="diagram.png" width="500" height="500">
 </p>
-The sample images are in 'sample_images' folder. [The rendering and mesh source](https://sketchfab.com/3d-models/rp-dennis-posed-004-100k-d9ddefd2ac68455fac8720256965c5f1)
+The sample images are in 'sample_images' folder. The rendering and mesh [source](https://sketchfab.com/3d-models/rp-dennis-posed-004-100k-d9ddefd2ac68455fac8720256965c5f1)
 
 ## Setup
 Please refer to the original [PIFuHD](https://shunsukesaito.github.io/PIFuHD/) repository for setup instructions, which include package installation and downloading the pretrained model.
