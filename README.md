@@ -26,12 +26,12 @@ Major code modifications:
     ├── apps
     |   ├── simple_test.py         # command line argument for a backside image 
     |   └── recon.py               # feed a backside image to PIFuHD 
-    ├── lib                        #
-    │   ├── model                  #
-    │   |   └── HGPIFuNetwNML.py   # obtain a backside normal map and apply AdaIN.
-    │   └── data                   #
-    |       └── EvalDataset.py     # image preprocessing for a backside image
-    └── ...
+    └── lib                        
+        ├── model                  
+        |   └── HGPIFuNetwNML.py   # obtain a backside normal map and apply AdaIN.
+        └── data                   
+            └── EvalDataset.py     # image preprocessing for a backside image
+    
 ```
     
 ## License
