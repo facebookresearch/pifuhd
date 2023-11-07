@@ -21,6 +21,7 @@ python -m apps.simple_test -i {folder_containing_images_and_rect} -b {path_of_ba
 
 ## Modification
 Major code modifications: 
+$ tree
 .
 ├── apps
 |   └── recon.py               # feed a backside image to PIFuHD 
