@@ -122,7 +122,7 @@ def fullbody_crop(pts):
         pmax = pts.max(0)
         pmin = pts.min(0)
 
-        center = (0.5 * (pmax[:2] + pmin[:2])).astype(np.int)
+        center = (0.5 * (pmax[:2] + pmin[:2])).astype(int)
         radius = int(0.65 * max(pmax[0]-pmin[0], pmax[1]-pmin[1]))
 
     x1 = center[0] - radius

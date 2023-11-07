@@ -135,6 +135,7 @@ class BaseOptions():
         parser.add_argument('--single', type=str, default='', help='single data for training')
         
         # for single image reconstruction
+        parser.add_argument('--back_img_path', type=str, default=None, help='path for back input image')
         parser.add_argument('--mask_path', type=str, help='path for input mask')
         parser.add_argument('--img_path', type=str, help='path for input image')
 
@@ -179,7 +180,7 @@ class BaseOptions():
                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
             parser = self.initialize(parser)
             self.parser = parser
-
+        
         if args is None:
             return self.parser.parse_args()
         else:

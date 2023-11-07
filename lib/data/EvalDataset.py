@@ -117,6 +117,7 @@ class EvalDataset(Dataset):
         # image
         image_512 = self.to_tensor(image_512)
         image = self.to_tensor(image)
+        back = self.process_back_img(rect)
         return {
             'name': img_name,
             'img': image.unsqueeze(0),
@@ -125,7 +126,26 @@ class EvalDataset(Dataset):
             'calib_world': calib_world.unsqueeze(0),
             'b_min': B_MIN,
             'b_max': B_MAX,
+            'back': back
         }
+    def process_back_img(self,rect):
+        img_path = self.opt.back_img_path
+        if img_path == 'None':
+            return None
+        
+        im = cv2.imread(img_path, cv2.IMREAD_UNCHANGED)
+        im = cv2.flip(im, 1) 
+
+        if im.shape[2] == 4:
+            im = im / 255.0
+            im[:,:,:3] /= im[:,:,3:] + 1e-8
+            im = im[:,:,3:] * im[:,:,:3] + 0.5 * (1.0 - im[:,:,3:])
+            im = (255.0 * im).astype(np.uint8)
+        im = crop_image(im, rect)
+        im_512 = cv2.resize(im, (512, 512))
+        image_512 = Image.fromarray(im_512[:,:,::-1]).convert('RGB')
+        image_512 = self.to_tensor(image_512).unsqueeze(0)
+        return image_512
 
     def __getitem__(self, index):
         return self.get_item(index)

@@ -11,6 +11,7 @@ from .HGFilters import HGFilter
 from ..net_util import init_net
 from ..networks import define_G
 import cv2
+from torchvision import transforms
 
 class HGPIFuNetwNML(BasePIFuNet):
     '''
@@ -108,7 +109,7 @@ class HGPIFuNetwNML(BasePIFuNet):
         print('not initialized', sorted(not_initialized))
         self.mlp.load_state_dict(model_dict) 
 
-    def filter(self, images):
+    def filter(self, images,back=None):
         '''
         apply a fully convolutional network to images.
         the resulting feature will be stored.
@@ -123,7 +124,29 @@ class HGPIFuNetwNML(BasePIFuNet):
                 nmls.append(self.nmlF)
             if self.netB is not None:
                 self.nmlB = self.netB.forward(images).detach()
+
+                #for multi-view back image
+                if back is not None:
+                    back = back.to(self.nmlF.device)
+                    nmlBack = self.netF.forward(back).detach()
+                    
+                    #adjust the range of channel-wise pixel values to fit the original range of self.nmlB 
+                    nmlBack = (nmlBack - torch.min(nmlBack.flatten(-2),-1,keepdim=True)[0].unsqueeze(-1))/(torch.max(nmlBack.flatten(-2),-1,keepdim=True)[0].unsqueeze(-1)-torch.min(nmlBack.flatten(-2),-1,keepdim=True)[0].unsqueeze(-1))
+                    nmlBack = nmlBack*(torch.max(self.nmlB.flatten(-2),-1,keepdim=True)[0].unsqueeze(-1)-torch.min(self.nmlB.flatten(-2),-1,keepdim=True)[0].unsqueeze(-1))+torch.min(self.nmlB.flatten(-2),-1,keepdim=True)[0].unsqueeze(-1)
+                    
+                    #channel-wise adain
+                    ori_ch_mean = torch.mean(nmlBack,(2,3),keepdim=True)
+                    ori_ch_std = torch.std(nmlBack,(2,3),keepdim=True)
+                    target_ch_mean = torch.mean(self.nmlB,(2,3),keepdim=True)
+                    target_ch_std = torch.std(self.nmlB,(2,3),keepdim=True)
+                    nmlBack = target_ch_std*(nmlBack - ori_ch_mean)/ori_ch_std + target_ch_mean
+                    
+                    nmlBack = nmlBack.clamp(-1,1)
+                    self.nmlB = nmlBack#(self.nmlB+nmlBack)/2
+
                 nmls.append(self.nmlB)
+
+
         if len(nmls) != 0:
             nmls = torch.cat(nmls,1)
             if images.size()[2:] != nmls.size()[2:]:

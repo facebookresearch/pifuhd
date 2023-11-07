@@ -69,7 +69,7 @@ class HGPIFuMRNet(BasePIFuNet):
             self.netG.eval()
         return self
 
-    def filter_global(self, images):
+    def filter_global(self, images,back=None):
         '''
         apply a fully convolutional network to images.
         the resulting feature will be stored.
@@ -80,7 +80,7 @@ class HGPIFuMRNet(BasePIFuNet):
             self.netG.filter(images)
         else:
             with torch.no_grad():
-                self.netG.filter(images)
+                self.netG.filter(images,back)
 
     def filter_local(self, images, rect=None):
         '''
