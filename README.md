@@ -26,10 +26,10 @@ $ tree
 ├── apps
 |   └── recon.py               # feed a backside image to PIFuHD 
 └── lib                       
-    ├── model                  
-    |   └── HGPIFuNetwNML.py   # obtain a backside normal map and apply AdaIN.
-    └── data
-        └── EvalDataset.py     # image preprocessing for a backside image
+|   ├── model                  
+|   |   └── HGPIFuNetwNML.py   # obtain a backside normal map and apply AdaIN.
+|   └── data
+|        └── EvalDataset.py     # image preprocessing for a backside image
 
 ## License
 [CC-BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/legalcode). 
