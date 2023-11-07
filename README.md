@@ -25,13 +25,19 @@ Major code modifications:
     ├── apps
     |   ├── simple_test.py         # command line argument for a backside image 
     |   └── recon.py               # feed a backside image to PIFuHD 
-    ├── lib                   
-    │   ├── model         
+    ├── lib                        #
+    │   ├── model                  #
     │   |   └── HGPIFuNetwNML.py   # obtain a backside normal map and apply AdaIN.
-    │   └── data                   
+    │   └── data                   #
     |       └── EvalDataset.py     # image preprocessing for a backside image
     └── ...
-    
+    .
+    ├── ...
+    ├── test                    # Test files (alternatively `spec` or `tests`)
+    │   ├── benchmarks          # Load and stress tests
+    │   ├── integration         # End-to-end, integration tests (alternatively `e2e`)
+    │   └── unit                # Unit tests
+    └── ...
 ## License
 [CC-BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/legalcode). 
 See the [LICENSE](LICENSE) file. 
