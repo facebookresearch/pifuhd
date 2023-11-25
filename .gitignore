@@ -3,3 +3,5 @@ __pycache__/
 checkpoints/
 sample_images/
 results/
+build
+pifuhd.egg-info/
