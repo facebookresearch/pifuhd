@@ -3,7 +3,9 @@ __pycache__/
 checkpoints/
 sample_images/
 results/
-build
+build/
 pifuhd.egg-info/
+dist/
+pifu_hd.egg-info/
 task_build
 task_upload
