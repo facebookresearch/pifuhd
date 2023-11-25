@@ -20,11 +20,11 @@ import matplotlib.cm as cm
 import matplotlib
 from numpy.linalg import inv
 
-from lib.options import BaseOptions
-from lib.mesh_util import save_obj_mesh_with_color, reconstruction
-from lib.data import EvalWPoseDataset, EvalDataset
-from lib.model import HGPIFuNetwNML, HGPIFuMRNet
-from lib.geometry import index
+from pifuhd.options import BaseOptions
+from pifuhd.mesh_util import save_obj_mesh_with_color, reconstruction
+from pifuhd.data import EvalWPoseDataset, EvalDataset
+from pifuhd.model import HGPIFuNetwNML, HGPIFuMRNet
+from pifuhd.geometry import index
 
 from PIL import Image
 
@@ -128,7 +128,7 @@ def gen_mesh_imgColor(res, net, cuda, data, save_path, thresh=0.5, use_octree=Tr
         print(e)
 
 
-def recon(opt, use_rect=False):
+def recon(opt, test_dataset):
     # load checkpoints
     state_dict_path = None
     if opt.load_netMR_checkpoint_path is not None:
@@ -163,11 +163,6 @@ def recon(opt, use_rect=False):
         raise Exception('failed loading state dict!', state_dict_path)
     
     # parser.print_options(opt)
-
-    if use_rect:
-        test_dataset = EvalDataset(opt)
-    else:
-        test_dataset = EvalWPoseDataset(opt)
 
     print('test data size: ', len(test_dataset))
     projection_mode = test_dataset.projection_mode
