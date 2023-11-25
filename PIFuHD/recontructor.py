@@ -7,16 +7,15 @@ import torch
 from numpy.linalg import inv
 from tqdm import tqdm
 
-from pifuhd.geometry import index
-from pifuhd.mesh_util import save_obj_mesh_with_color, reconstruction
-from pifuhd.model import HGPIFuNetwNML, HGPIFuMRNet
+from PIFuHD.geometry import index
+from PIFuHD.mesh_util import save_obj_mesh_with_color, reconstruction
+from PIFuHD.model import HGPIFuNetwNML, HGPIFuMRNet
 
 
 class Reconstructor:
 
-    def __init__(self, opt, dataset):
+    def __init__(self, opt):
         # load checkpoints
-        self.test_dataset = dataset
         state_dict_path = None
         if opt.load_netMR_checkpoint_path is not None:
             state_dict_path = opt.load_netMR_checkpoint_path
@@ -26,10 +25,8 @@ class Reconstructor:
         else:
             state_dict_path = '%s/%s_train_epoch_%d' % (opt.checkpoints_path, opt.name, opt.resume_epoch)
 
-        if opt.start_id < 0:
-            opt.start_id = 0
-        if opt.end_id < 0:
-            opt.end_id = len(self.test_dataset)
+        self.start_id = opt.start_id
+        self.end_id = opt.end_id
 
         self.range = range(opt.start_id, opt.end_id)
 
@@ -53,12 +50,9 @@ class Reconstructor:
         else:
             exit(f'failed loading state dict! {state_dict_path}')
 
-        print('test data size: ', len(self.test_dataset))
-        projection_mode = self.test_dataset.projection_mode
-
         opt_netG = state_dict['opt_netG']
-        self.netG = HGPIFuNetwNML(opt_netG, projection_mode).to(device=self.cuda)
-        self.netMR = HGPIFuMRNet(opt, self.netG, projection_mode).to(device=self.cuda)
+        self.netG = HGPIFuNetwNML(opt_netG, 'orthogonal').to(device=self.cuda)
+        self.netMR = HGPIFuMRNet(opt, self.netG, 'orthogonal').to(device=self.cuda)
 
         # load checkpoints
         self.netMR.load_state_dict(state_dict['model_state_dict'])
@@ -72,31 +66,36 @@ class Reconstructor:
     def __set_eval(self):
         self.netG.eval()
 
-    def evaluate(self):
+    def evaluate(self, test_dataset):
         # test
+        if self.start_id < 0:
+            self.start_id = 0
+        if self.end_id < 0:
+            self.end_id = len(test_dataset)
+
         with torch.no_grad():
             self.__set_eval()
 
             print('generate mesh (test) ...')
-            for i in tqdm(self.range):
-                if i >= len(self.test_dataset):
+            for i in tqdm(range(self.start_id, self.end_id)):
+                if i >= len(test_dataset):
                     break
 
                 # for multi-person processing, set it to False
                 if True:
-                    test_data = self.test_dataset[i]
+                    test_data = test_dataset[i]
 
                     save_path = '%s/%s/recon/result_%s_%d.obj' % (
                         self.opt.results_path, self.opt.name, test_data['name'], self.opt.resolution)
 
                     print(save_path)
-                    self._gen_mesh_gray(self.opt.resolution, test_data, save_path, components=self.opt.use_compose)
+                    return self._gen_mesh_gray(self.opt.resolution, test_data, save_path, components=self.opt.use_compose)
                 else:
                     for j in range(test_dataset.get_n_person(i)):
                         test_dataset.person_id = j
                         test_data = test_dataset[i]
                         save_path = '%s/%s/recon/result_%s_%d.obj' % (self.opt.results_path, opt.name, test_data['name'], j)
-                        gen_mesh(self.opt.resolution, self.cuda, test_data, save_path, components=self.opt.use_compose)
+                        return self._gen_mesh_gray(self.opt.resolution, self.cuda, test_data, save_path, components=self.opt.use_compose)
 
     def _gen_mesh_gray(self, res, data, save_path, thresh=0.5, use_octree=True, components=False):
         image_tensor_global = data['img_512'].to(device=self.cuda)
@@ -146,6 +145,7 @@ class Reconstructor:
                 color[left:right] = nml.T
 
             save_obj_mesh_with_color(save_path, verts, faces, color)
+            return save_img_path, save_path
         except Exception as e:
             print(e)
 

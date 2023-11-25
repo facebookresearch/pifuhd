@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 
 def get_version():
-    filename = "pifuhd/__init__.py"
+    filename = "PIFuHD/__init__.py"
     with open(filename) as f:
         match = re.search(
             r"""^__version__ = ['"]([^'"]*)['"]""", f.read(), re.M
@@ -26,7 +26,7 @@ def get_long_description():
 
 def main():
     setup(
-        name='pifuhd',
+        name='pifu-hd',
         version=get_version(),
         long_description=get_long_description(),
         long_description_content_type="text/markdown",
@@ -37,8 +37,8 @@ def main():
         author_email='shunsuke.saito16@gmail.com',
         description=' PIFuHD: Multi-Level Pixel-Aligned Implicit Function for High-Resolution 3D Human Digitization (CVPR 2020)',
         install_requires=get_install_requires(),
-        package_data={"pifuhd": []},
-        entry_points={"console_scripts": ["pifuhd=pifuhd.__main__:main"]},
+        package_data={"PIFuHD": []},
+        entry_points={"console_scripts": ["pifuhd=PIFuHD.__main__:main"]},
         classifiers=[
             "Development Status :: 5 - Production/Stable",
             "Intended Audience :: Developers",

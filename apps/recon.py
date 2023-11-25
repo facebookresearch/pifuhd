@@ -20,11 +20,11 @@ import matplotlib.cm as cm
 import matplotlib
 from numpy.linalg import inv
 
-from pifuhd.options import BaseOptions
-from pifuhd.mesh_util import save_obj_mesh_with_color, reconstruction
-from pifuhd.data import EvalWPoseDataset, EvalDataset, EvalWRectDataset
-from pifuhd.model import HGPIFuNetwNML, HGPIFuMRNet
-from pifuhd.geometry import index
+from PIFuHD.options import BaseOptions
+from PIFuHD.mesh_util import save_obj_mesh_with_color, reconstruction
+from PIFuHD.data import EvalWPoseDataset, EvalDataset, EvalWRectDataset
+from PIFuHD.model import HGPIFuNetwNML, HGPIFuMRNet
+from PIFuHD.geometry import index
 
 from PIL import Image
 

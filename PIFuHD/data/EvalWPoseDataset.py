@@ -1,7 +1,7 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All rights reserved.
 import json
 import numpy as np
-from pifuhd.data.EvalDataset import EvalDataset
+from PIFuHD.data.EvalDataset import EvalDataset
 from .helper_dataset import make_bundles
 from .helper_image_crop import crop_image, face_crop, upperbody_crop, fullbody_crop
 

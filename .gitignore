@@ -5,3 +5,5 @@ sample_images/
 results/
 build
 pifuhd.egg-info/
+task_build
+task_upload

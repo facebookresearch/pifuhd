@@ -2,7 +2,7 @@ import os
 import sys
 
 import cv2
-from pifuhd.data.ImageBundle import ImageBundle
+from PIFuHD.data.ImageBundle import ImageBundle
 
 
 def load_image(path):

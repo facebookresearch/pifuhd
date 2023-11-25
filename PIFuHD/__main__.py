@@ -2,9 +2,9 @@
 
 import argparse
 
-from pifuhd.data import EvalWRectDataset, EvalWPoseDataset
-from pifuhd.options import BaseOptions
-from pifuhd.recontructor import Reconstructor
+from PIFuHD.data import EvalWRectDataset, EvalWPoseDataset
+from PIFuHD.options import BaseOptions
+from PIFuHD.recontructor import Reconstructor
 
 ###############################################################################################
 #                   Setting
@@ -12,7 +12,7 @@ from pifuhd.recontructor import Reconstructor
 parser = argparse.ArgumentParser()
 parser.add_argument('-i', '--input_path', type=str, default='./sample_images')
 parser.add_argument('-o', '--out_path', type=str, default='./results')
-parser.add_argument('-c', '--ckpt_path', type=str, default='./checkpoints/pifuhd.pt')
+parser.add_argument('-c', '--ckpt_path', type=str, default='./checkpoints/PIFuHD.pt')
 parser.add_argument('-r', '--resolution', type=int, default=512)
 parser.add_argument('--use_rect', action='store_true', help='use rectangle for cropping')
 args = parser.parse_args()
@@ -28,8 +28,8 @@ def recon(opts: BaseOptions, use_rect=False):
     else:
         dataset = EvalWPoseDataset(opts)
 
-    reconstructor = Reconstructor(opts, dataset)
-    reconstructor.evaluate()
+    reconstructor = Reconstructor(opts)
+    reconstructor.evaluate(dataset)
 
 
 def main():

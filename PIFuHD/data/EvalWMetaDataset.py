@@ -1,6 +1,6 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All rights reserved.
-from pifuhd.data.EvalDataset import EvalDataset
-from pifuhd.data.helper_image_crop import crop_image
+from PIFuHD.data.EvalDataset import EvalDataset
+from PIFuHD.data.helper_image_crop import crop_image
 
 
 class EvalWMetaDataset(EvalDataset):
