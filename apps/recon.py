@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 ROOT_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 import time
-import json 
+import json
 import numpy as np
 import cv2
 import random
@@ -20,15 +20,16 @@ import matplotlib.cm as cm
 import matplotlib
 from numpy.linalg import inv
 
-from lib.options import BaseOptions
-from lib.mesh_util import save_obj_mesh_with_color, reconstruction
-from lib.data import EvalWPoseDataset, EvalDataset
-from lib.model import HGPIFuNetwNML, HGPIFuMRNet
-from lib.geometry import index
+from PIFuHD.options import BaseOptions
+from PIFuHD.mesh_util import save_obj_mesh_with_color, reconstruction
+from PIFuHD.data import EvalWPoseDataset, EvalDataset, EvalWRectDataset
+from PIFuHD.model import HGPIFuNetwNML, HGPIFuMRNet
+from PIFuHD.geometry import index
 
 from PIL import Image
 
 parser = BaseOptions()
+
 
 def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True, components=False):
     image_tensor_global = data['img_512'].to(device=cuda)
@@ -36,7 +37,7 @@ def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True, compo
     calib_tensor = data['calib'].to(device=cuda)
 
     net.filter_global(image_tensor_global)
-    net.filter_local(image_tensor[:,None])
+    net.filter_local(image_tensor[:, None])
 
     try:
         if net.netG.netF is not None:
@@ -45,14 +46,15 @@ def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True, compo
             image_tensor_global = torch.cat([image_tensor_global, net.netG.nmlB], 0)
     except:
         pass
-    
+
     b_min = data['b_min']
     b_max = data['b_max']
     try:
         save_img_path = save_path[:-4] + '.png'
         save_img_list = []
         for v in range(image_tensor_global.shape[0]):
-            save_img = (np.transpose(image_tensor_global[v].detach().cpu().numpy(), (1, 2, 0)) * 0.5 + 0.5)[:, :, ::-1] * 255.0
+            save_img = (np.transpose(image_tensor_global[v].detach().cpu().numpy(), (1, 2, 0)) * 0.5 + 0.5)[:, :,
+                       ::-1] * 255.0
             save_img_list.append(save_img)
         save_img = np.concatenate(save_img_list, axis=1)
         cv2.imwrite(save_img_path, save_img)
@@ -72,7 +74,7 @@ def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True, compo
                 right = -1
             else:
                 right = (i + 1) * interval
-            net.calc_normal(verts_tensor[:, None, :, left:right], calib_tensor[:,None], calib_tensor)
+            net.calc_normal(verts_tensor[:, None, :, left:right], calib_tensor[:, None], calib_tensor)
             nml = net.nmls.detach().cpu().numpy()[0] * 0.5 + 0.5
             color[left:right] = nml.T
 
@@ -87,7 +89,7 @@ def gen_mesh_imgColor(res, net, cuda, data, save_path, thresh=0.5, use_octree=Tr
     calib_tensor = data['calib'].to(device=cuda)
 
     net.filter_global(image_tensor_global)
-    net.filter_local(image_tensor[:,None])
+    net.filter_local(image_tensor[:, None])
 
     try:
         if net.netG.netF is not None:
@@ -103,7 +105,8 @@ def gen_mesh_imgColor(res, net, cuda, data, save_path, thresh=0.5, use_octree=Tr
         save_img_path = save_path[:-4] + '.png'
         save_img_list = []
         for v in range(image_tensor_global.shape[0]):
-            save_img = (np.transpose(image_tensor_global[v].detach().cpu().numpy(), (1, 2, 0)) * 0.5 + 0.5)[:, :, ::-1] * 255.0
+            save_img = (np.transpose(image_tensor_global[v].detach().cpu().numpy(), (1, 2, 0)) * 0.5 + 0.5)[:, :,
+                       ::-1] * 255.0
             save_img_list.append(save_img)
         save_img = np.concatenate(save_img_list, axis=1)
         cv2.imwrite(save_img_path, save_img)
@@ -120,7 +123,7 @@ def gen_mesh_imgColor(res, net, cuda, data, save_path, thresh=0.5, use_octree=Tr
 
         if 'calib_world' in data:
             calib_world = data['calib_world'].numpy()[0]
-            verts = np.matmul(np.concatenate([verts, np.ones_like(verts[:,:1])],1), inv(calib_world).T)[:,:3]
+            verts = np.matmul(np.concatenate([verts, np.ones_like(verts[:, :1])], 1), inv(calib_world).T)[:, :3]
 
         save_obj_mesh_with_color(save_path, verts, faces, color)
 
@@ -128,7 +131,7 @@ def gen_mesh_imgColor(res, net, cuda, data, save_path, thresh=0.5, use_octree=Tr
         print(e)
 
 
-def recon(opt, use_rect=False):
+def recon(opt, test_dataset):
     # load checkpoints
     state_dict_path = None
     if opt.load_netMR_checkpoint_path is not None:
@@ -138,7 +141,7 @@ def recon(opt, use_rect=False):
         opt.resume_epoch = 0
     else:
         state_dict_path = '%s/%s_train_epoch_%d' % (opt.checkpoints_path, opt.name, opt.resume_epoch)
-    
+
     start_id = opt.start_id
     end_id = opt.end_id
 
@@ -147,13 +150,13 @@ def recon(opt, use_rect=False):
     state_dict = None
     if state_dict_path is not None and os.path.exists(state_dict_path):
         print('Resuming from ', state_dict_path)
-        state_dict = torch.load(state_dict_path, map_location=cuda)    
+        state_dict = torch.load(state_dict_path, map_location=cuda)
         print('Warning: opt is overwritten.')
         dataroot = opt.dataroot
         resolution = opt.resolution
         results_path = opt.results_path
         loadSize = opt.loadSize
-        
+
         opt = state_dict['opt']
         opt.dataroot = dataroot
         opt.resolution = resolution
@@ -161,13 +164,8 @@ def recon(opt, use_rect=False):
         opt.loadSize = loadSize
     else:
         raise Exception('failed loading state dict!', state_dict_path)
-    
-    # parser.print_options(opt)
 
-    if use_rect:
-        test_dataset = EvalDataset(opt)
-    else:
-        test_dataset = EvalWPoseDataset(opt)
+    # parser.print_options(opt)
 
     print('test data size: ', len(test_dataset))
     projection_mode = test_dataset.projection_mode
@@ -199,12 +197,13 @@ def recon(opt, use_rect=False):
         for i in tqdm(range(start_id, end_id)):
             if i >= len(test_dataset):
                 break
-            
+
             # for multi-person processing, set it to False
             if True:
                 test_data = test_dataset[i]
 
-                save_path = '%s/%s/recon/result_%s_%d.obj' % (opt.results_path, opt.name, test_data['name'], opt.resolution)
+                save_path = '%s/%s/recon/result_%s_%d.obj' % (
+                opt.results_path, opt.name, test_data['name'], opt.resolution)
 
                 print(save_path)
                 gen_mesh(opt.resolution, netMR, cuda, test_data, save_path, components=opt.use_compose)
@@ -215,10 +214,16 @@ def recon(opt, use_rect=False):
                     save_path = '%s/%s/recon/result_%s_%d.obj' % (opt.results_path, opt.name, test_data['name'], j)
                     gen_mesh(opt.resolution, netMR, cuda, test_data, save_path, components=opt.use_compose)
 
+
 def reconWrapper(args=None, use_rect=False):
     opt = parser.parse(args)
-    recon(opt, use_rect)
+    if use_rect:
+        dataset = EvalWRectDataset(opt)
+    else:
+        dataset = EvalWPoseDataset(opt)
+
+    recon(opt, dataset)
+
 
 if __name__ == '__main__':
     reconWrapper()
-  

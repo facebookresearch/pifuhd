@@ -1,12 +1,13 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All rights reserved.
 
-
-from .recon import reconWrapper
 import argparse
 
+from PIFuHD.data import EvalWRectDataset, EvalWPoseDataset
+from PIFuHD.options import BaseOptions
+from PIFuHD.recontructor import Reconstructor
 
 ###############################################################################################
-##                   Setting
+#                   Setting
 ###############################################################################################
 parser = argparse.ArgumentParser()
 parser.add_argument('-i', '--input_path', type=str, default='./sample_images')
@@ -15,17 +16,36 @@ parser.add_argument('-c', '--ckpt_path', type=str, default='./checkpoints/PIFuHD
 parser.add_argument('-r', '--resolution', type=int, default=512)
 parser.add_argument('--use_rect', action='store_true', help='use rectangle for cropping')
 args = parser.parse_args()
+
+
 ###############################################################################################
-##                   Upper PIFu
+#                   Upper PIFu
 ###############################################################################################
 
-resolution = str(args.resolution)
+def recon(opts: BaseOptions, use_rect=False):
+    if use_rect:
+        dataset = EvalWRectDataset(opts)
+    else:
+        dataset = EvalWPoseDataset(opts)
 
-start_id = -1
-end_id = -1
-cmd = ['--dataroot', args.input_path, '--results_path', args.out_path,\
-       '--loadSize', '1024', '--resolution', resolution, '--load_netMR_checkpoint_path', \
-       args.ckpt_path,\
-       '--start_id', '%d' % start_id, '--end_id', '%d' % end_id]
-reconWrapper(cmd, args.use_rect)
+    reconstructor = Reconstructor(opts)
+    reconstructor.evaluate(dataset)
 
+
+def main():
+    cmd = ['--dataroot', args.input_path,
+           '--results_path', args.out_path,
+           '--loadSize', '1024',
+           '--resolution', str(args.resolution),
+           '--load_netMR_checkpoint_path', args.ckpt_path,
+           '--start_id', '-1',
+           '--end_id', '-1'
+           ]
+
+    options_parser = BaseOptions()
+    opt = options_parser.parse(cmd)
+    recon(opt, args.use_rect)
+
+
+if __name__ == '__main__':
+    main()

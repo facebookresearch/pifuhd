@@ -8,10 +8,10 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 ROOT_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-from lib.render.mesh import load_obj_mesh, compute_normal
-from lib.render.camera import Camera
-from lib.render.gl.geo_render import GeoRender
-from lib.render.gl.color_render import ColorRender
+from PIFuHD.render.mesh import load_obj_mesh, compute_normal
+from PIFuHD.render.camera import Camera
+from PIFuHD.render.gl.geo_render import GeoRender
+from PIFuHD.render.gl.color_render import ColorRender
 import trimesh
 
 import cv2

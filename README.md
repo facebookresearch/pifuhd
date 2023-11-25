@@ -1,6 +1,6 @@
 # [PIFuHD: Multi-Level Pixel-Aligned Implicit Function for High-Resolution 3D Human Digitization (CVPR 2020)](https://shunsukesaito.github.io/PIFuHD/)
 
-[![report](https://img.shields.io/badge/arxiv-report-red)](https://arxiv.org/pdf/2004.00452.pdf) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/11z58bl3meSzo6kFqkahMa35G5jmh2Wgt?usp=sharing)
+[![report](https://img.shields.io/badge/arxiv-report-red)](https://arxiv.org/pdf/2004.00452.pdf) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/11z58bl3meSzo6kFqkahMa35G5jmh2Wgt?usp=sharing) [![HuggingFace](https://img.shields.io/badge/%F0%9F%A4%97-Try%20in%20Huggingface-yellow)](https://huggingface.co/spaces/leonelhs/pifuhd) [![PyPI version](https://badge.fury.io/py/pifu-hd.svg)](https://badge.fury.io/py/pifu-hd)
 
 News:
 * \[2020/06/15\] Demo with Google Colab (incl. visualization) is available! Please check out [#pifuhd on Twitter](https://twitter.com/search?q=%23pifuhd&src=recent_search_click&f=live) for many results tested by users!
@@ -82,6 +82,45 @@ python -m apps.render_turntable -f {path_of_objs} -ww {rendering_width} -hh {ren
 # add -g for geometry rendering. default is normal visualization.
 ```
 
+## Command line tool
+```console
+foo@bar:~$ pip install pifu-hd
+
+foo@bar:~$ pifuhd -h
+
+usage: pifuhd [-h] [-i INPUT_PATH] [-o OUT_PATH] [-c CKPT_PATH] [-r RESOLUTION] [--use_rect]
+
+options:
+  -h, --help            show this help message and exit
+  -i INPUT_PATH,        --input_path INPUT_PATH
+  -o OUT_PATH,          --out_path OUT_PATH
+  -c CKPT_PATH,         --ckpt_path CKPT_PATH
+  -r RESOLUTION,        --resolution RESOLUTION
+  --use_rect            use rectangle for cropping
+```
+## Python API usage <a name="api-usage"/>
+```python
+from PIFuHD.recontructor import Reconstructor
+from PIFuHD.data import EvalWPoseDataset
+
+from PIFuHD.options import BaseOptions
+
+cmd = ['--dataroot', './sample_images',
+       '--results_path', './results',
+       '--loadSize', '1024',
+       '--resolution', '256',
+       '--load_netMR_checkpoint_path', './checkpoints/pifuhd.pt',
+       '--start_id', '-1',
+       '--end_id', '-1']
+
+options_parser = BaseOptions()
+opts = options_parser.parse(cmd)
+
+dataset = EvalWPoseDataset(opts)
+
+reconstructor = Reconstructor(opts)
+reconstructor.evaluate(dataset)
+```
 ## Citation
 ```
 @inproceedings{saito2020pifuhd,
