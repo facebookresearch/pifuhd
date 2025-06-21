@@ -147,7 +147,7 @@ def recon(opt, use_rect=False):
     state_dict = None
     if state_dict_path is not None and os.path.exists(state_dict_path):
         print('Resuming from ', state_dict_path)
-        state_dict = torch.load(state_dict_path, map_location=cuda)    
+        state_dict = torch.load(state_dict_path, map_location=cuda,weights_only=False)    
         print('Warning: opt is overwritten.')
         dataroot = opt.dataroot
         resolution = opt.resolution

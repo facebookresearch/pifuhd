@@ -90,9 +90,9 @@ def eval_grid_octree(coords, eval_func,
 
     sdf = np.zeros(resolution)
 
-    notprocessed = np.zeros(resolution, dtype=np.bool)
+    notprocessed = np.zeros(resolution, dtype=bool)
     notprocessed[:-1,:-1,:-1] = True
-    grid_mask = np.zeros(resolution, dtype=np.bool)
+    grid_mask = np.zeros(resolution, dtype=bool)
 
     reso = resolution[0] // init_resolution
 
